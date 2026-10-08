@@ -1,0 +1,9 @@
+{
+  "display_name": "깡폰",
+  "loading_order": 100,
+  "author": "GGang910",
+  "version": "1.0.4",
+  "js": "index.js",
+  "css": "style.css",
+  "auto_update": false
+}

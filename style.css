@@ -1,0 +1,1861 @@
+/* ===== RESET & BASE ===== */
+/* CSS 변수는 #kkang_phone-root 로 스코프 — 전역(:root) 오염 금지(다른 확장·모바일 레이아웃 깨짐 방지) */
+#kkang_phone-root {
+  --primary: #007AFF; --primary-light: #4da3ff; --primary-dark: #0062cc;
+  --green: #2D7A5A; --red: #C0392B; --blue: #3B82F6; --gray: #6B7280;
+  --bg: #f5f5f7; --white: #ffffff; --text: #1a1a2e;
+  --text-sec: #6b7a90; --text-muted: #9ca3af; --border: #e5e7eb;
+  --bubble-user: #007AFF; --bubble-npc: #e8e8ea;
+  --card-bg: #ffffff; --primary-bg: rgba(0,122,255,0.08);
+  /* 입력칸 통일 토큰 — 모든 input/textarea/select가 여기서 색을 읽음(applyTheme가 다크로 교체) */
+  --field-bg: #ffffff; --field-text: #1a1a2e; --field-border: #d8dde6; --field-ph: #9aa0a6;
+  color-scheme: light; /* 네이티브 컨트롤(날짜 피커·셀렉트·스크롤바)을 모드에 맞게 */
+}#kkang_phone-root *{ margin: 0; padding: 0; box-sizing: border-box; }#kkang_phone-root,#kkang_phone-root{ height: auto; overflow: hidden; background: transparent; }#kkang_phone-root{ padding: 8px; font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; -webkit-font-smoothing: antialiased; }
+
+/* ===== PHONE FRAME ===== */
+#kkang_phone-root .phone-frame{
+  position: relative; width: 100%; max-width: 400px;
+  height: 100%; /* 높이 진실은 부모(root, dvh). 자체 vh/dvh 안 쓰는 이유: root와 단위가 어긋나면 하단(홈버튼/모달)이 잘림 */
+  margin: 0 auto; background: var(--bg); border-radius: 28px;
+  border: 2px solid var(--border);
+  overflow: hidden; display: flex; flex-direction: column;
+  animation: phoneAppear 0.3s ease-out;
+}
+@keyframes phoneAppear { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== STATUS BAR ===== */
+#kkang_phone-root .status-bar{
+  height: 40px; background: var(--white); display: flex; align-items: center;
+  justify-content: space-between; padding: 0 20px; font-size: 13px;
+  font-weight: 600; color: var(--text); flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}#kkang_phone-root .sb-icons{ display: flex; gap: 6px; font-size: 12px; color: var(--text-sec); }
+
+/* ===== SCREEN CONTAINER ===== */
+#kkang_phone-root #screen{
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; position: relative; background: var(--bg);
+}
+
+/* ===== SCREEN HEADER ===== */
+#kkang_phone-root .s-header{
+  height: 52px; display: flex; align-items: center; padding: 0 12px;
+  background: var(--white); border-bottom: 1px solid var(--border);
+  gap: 8px; flex-shrink: 0;
+}#kkang_phone-root .s-header h2{ flex: 1; font-size: 17px; font-weight: 700; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }#kkang_phone-root .btn-icon{
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  background: none; border: none; color: var(--primary); font-size: 17px;
+  cursor: pointer; border-radius: 50%; flex-shrink: 0; transition: background 0.15s;
+}#kkang_phone-root .btn-icon:hover{ background: rgba(0,122,255,0.08); }#kkang_phone-root .btn-icon:active{ background: rgba(0,122,255,0.15); }
+
+/* ===== SCREEN BODY ===== */
+#kkang_phone-root .s-body{ flex: 1; overflow-y: auto; }#kkang_phone-root .s-body::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .s-body::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.12); border-radius: 2px; }
+
+/* ===== HOME SCREEN ===== */
+#kkang_phone-root .home-screen{
+  position: relative; display: flex; flex-direction: column;
+  height: 100%; padding: 0; overflow: hidden;
+  background: var(--bg);
+}
+#kkang_phone-root .home-top{ flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 20px 0; min-height: 0; }
+#kkang_phone-root .home-top .home-date{ margin-bottom: 0; }
+/* 앱 서랍 힌트(▲) */
+#kkang_phone-root .home-drawer-hint{ display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--text-muted); font-size: 10px; padding: 6px 0; cursor: pointer; opacity: 0.8; }
+#kkang_phone-root .home-drawer-hint i{ font-size: 13px; animation: drawerHintBob 1.8s ease-in-out infinite; }
+@keyframes drawerHintBob{ 0%,100%{ transform: translateY(0); } 50%{ transform: translateY(-3px); } }
+/* 하단 독 */
+#kkang_phone-root .home-dock{ display: flex; justify-content: space-around; align-items: flex-start; gap: 8px; margin: 0 12px 14px; padding: 14px 8px 12px; background: var(--card-bg); border-radius: 26px; box-shadow: 0 2px 14px rgba(0,0,0,0.10); }
+#kkang_phone-root .home-dock .app-item{ flex: 1; }
+#kkang_phone-root .app-icon-wrap.drawer{ background: linear-gradient(135deg,#22c55e,#3b82f6 55%,#a855f7); color:#fff; }
+#kkang_phone-root .app-icon-wrap.appstore{ background: linear-gradient(135deg,#5b51e0,#8b5cf6); color:#fff; }
+/* 앱 스토어 화면 */
+#kkang_phone-root .store-intro{ font-size: 12px; color: var(--text-sec); padding: 14px 16px; line-height: 1.5; border-bottom: 1px solid var(--border); }
+#kkang_phone-root .store-list{ display: flex; flex-direction: column; }
+#kkang_phone-root .store-item{ display: flex; align-items: center; gap: 13px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+#kkang_phone-root .store-ic{ flex-shrink: 0; width: 52px; height: 52px; font-size: 21px; }
+#kkang_phone-root .store-info{ flex: 1; min-width: 0; }
+#kkang_phone-root .store-name{ font-size: 15px; font-weight: 700; color: var(--text); }
+#kkang_phone-root .store-dev{ font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+#kkang_phone-root .store-desc{ font-size: 11.5px; color: var(--text-sec); margin-top: 4px; line-height: 1.4; }
+#kkang_phone-root .store-actions{ display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+#kkang_phone-root .store-btn{ border: none; border-radius: 16px; padding: 7px 16px; font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; transition: filter .12s; }
+#kkang_phone-root .store-btn:active{ filter: brightness(0.93); }
+#kkang_phone-root .store-btn.get{ background: var(--primary-bg); color: var(--primary); }
+#kkang_phone-root .store-btn.open{ background: var(--primary); color: #fff; }
+#kkang_phone-root .store-btn.del{ background: var(--bg); color: var(--text-sec); border: 1px solid var(--border); }
+/* 앱 서랍 패널 */
+#kkang_phone-root .app-drawer-backdrop{ position: absolute; inset: 0; background: rgba(0,0,0,0.35); opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 9; }
+#kkang_phone-root .app-drawer-backdrop.open{ opacity: 1; pointer-events: auto; }
+/* 전체화면·불투명 서랍 — 홈이 잘리거나 회색으로 비치지 않도록 화면 전체를 덮는다 (흰색 배경) */
+#kkang_phone-root .app-drawer{ position: absolute; left: 0; right: 0; top: 0; bottom: 0; height: 100%; background: var(--card-bg); border-radius: 0; box-shadow: none; transform: translateY(102%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index: 10; display: flex; flex-direction: column; padding: 14px 16px 18px; }
+#kkang_phone-root .app-drawer.open{ transform: translateY(0); }
+#kkang_phone-root .app-drawer-grip{ width: 42px; height: 4px; border-radius: 2px; background: var(--border); margin: 4px auto 12px; cursor: pointer; flex-shrink: 0; }
+#kkang_phone-root .app-drawer-title{ font-size: 14px; font-weight: 700; color: var(--text); text-align: center; margin-bottom: 16px; flex-shrink: 0; }
+#kkang_phone-root .app-grid-drawer{ grid-template-columns: repeat(4, 1fr) !important; max-width: none !important; width: 100% !important; gap: 20px 6px !important; overflow-y: auto; align-content: start; }
+/* 하단 네비게이션 바 (최근앱 / 홈 / 뒤로) */
+#kkang_phone-root .nav-bar{ display: flex; align-items: center; justify-content: space-around; height: 44px; background: var(--white); border-top: 1px solid var(--border); flex-shrink: 0; }
+#kkang_phone-root .nav-btn{ flex: 1; height: 100%; background: none; border: none; color: var(--text-sec); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; transition: background 0.12s; }
+#kkang_phone-root .nav-btn:active{ background: rgba(0,0,0,0.07); }
+#kkang_phone-root .nav-btn .fa-square{ font-size: 13px; }
+#kkang_phone-root .nav-btn.nav-home .fa-circle{ font-size: 15px; }
+#kkang_phone-root .nav-btn .fa-caret-left{ font-size: 23px; }
+/* 커스텀 홈 배치: 핀한 앱 그리드 + 헤더 핀 버튼 */
+#kkang_phone-root .home-pinned{ padding: 0 16px; width: 100%; box-sizing: border-box; }
+#kkang_phone-root .home-pinned-grid{ grid-template-columns: repeat(4, 1fr) !important; max-width: 300px !important; width: 100% !important; margin: 0 auto 10px !important; gap: 16px 6px !important; }
+/* 스토어 행: 이름 옆 홈 고정(📌) 버튼 */
+#kkang_phone-root .store-name-row{ display: flex; align-items: center; gap: 7px; }
+#kkang_phone-root .store-pin{ background: none; border: none; cursor: pointer; padding: 2px; font-size: 13px; color: var(--text-muted); transition: color .12s, transform .1s; }
+#kkang_phone-root .store-pin:active{ transform: scale(0.85); }
+#kkang_phone-root .store-pin.on{ color: var(--primary); }#kkang_phone-root .home-time{ font-size: 54px; font-weight: 200; color: var(--text); letter-spacing: -2px; line-height: 1.1; }#kkang_phone-root .home-date{ font-size: 14px; color: var(--text-sec); line-height: 1.3; margin-top: 10px; margin-bottom: 48px; }#kkang_phone-root .app-grid{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; max-width: 320px; }#kkang_phone-root .app-item{ display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }#kkang_phone-root .app-icon-wrap{
+  width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center;
+  justify-content: center; font-size: 22px; color: white; position: relative;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12); transition: transform 0.15s;
+}
+/* 아이콘 글리프(i/svg) 흰색 강제. 모바일 ST 테마가 i{color:...}로 덮어써서 회색으로 보이던 문제 방지(배경 그라데이션 위 흰 아이콘 유지). */
+#kkang_phone-root .app-icon-wrap > i, #kkang_phone-root .app-icon-wrap > svg{ color: #fff !important; fill: #fff !important; }
+/* 연락처 추가 직후 새 행 강조 — "추가됐다"는 즉각 피드백 */
+@keyframes contactAddedFlash { 0%{ background: var(--primary-bg); } 100%{ background: var(--card-bg); } }
+#kkang_phone-root .contact-added-flash{ animation: contactAddedFlash 1.1s ease-out; }
+#kkang_phone-root .app-icon-wrap:active{ transform: scale(0.9); }#kkang_phone-root .app-icon-wrap.msg{ background: var(--primary); }#kkang_phone-root .app-icon-wrap.call{ background: var(--green); }#kkang_phone-root .app-icon-wrap.contacts{ background: var(--blue); }#kkang_phone-root .app-icon-wrap.settings{ background: var(--gray); }#kkang_phone-root .app-icon-wrap.twitter{ background: #000; }#kkang_phone-root .badge{
+  position: absolute; top: -5px; right: -5px; background: var(--red); color: white;
+  font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}#kkang_phone-root .app-label{ font-size: 12px; color: var(--text-sec); font-weight: 500; }
+
+/* ===== LIST ITEMS ===== */
+#kkang_phone-root .list-item{
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+  cursor: pointer; border-bottom: 1px solid var(--border); background: var(--white);
+  transition: background 0.12s;
+}#kkang_phone-root .list-item:active{ background: rgba(0,0,0,0.03); }#kkang_phone-root .avatar{
+  width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 15px; font-weight: 700; color: white; flex-shrink: 0;
+}#kkang_phone-root .list-info{ flex: 1; min-width: 0; }#kkang_phone-root .list-name{ font-size: 14px; font-weight: 600; color: var(--text); }#kkang_phone-root .list-preview{ font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }#kkang_phone-root .list-meta{ display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }#kkang_phone-root .list-time{ font-size: 11px; color: var(--text-muted); }#kkang_phone-root .list-unread{
+  background: var(--primary); color: white; font-size: 10px; font-weight: 700;
+  min-width: 18px; height: 18px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+
+/* ===== CHAT UI ===== */
+#kkang_phone-root .chat-area{
+  flex: 1; overflow-y: auto; padding: 12px 14px; display: flex;
+  flex-direction: column; gap: 6px;
+}#kkang_phone-root .chat-area::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .chat-area::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.1); border-radius: 2px; }#kkang_phone-root .msg-row{ display: flex; gap: 8px; max-width: 85%; }#kkang_phone-root .msg-row.user{ align-self: flex-end; flex-direction: row-reverse; }#kkang_phone-root .msg-row.npc{ align-self: flex-start; flex-direction: row; }
+/* 카카오톡 기준: 아바타/이름을 메시지 묶음의 '맨 위'에 정렬 */
+#kkang_phone-root .msg-row .chat-avatar{ flex-shrink: 0; align-self: flex-start; margin-bottom: 0; }
+/* 연속 메시지(같은 사람)일 때 아바타 자리만 비워두는 스페이서 */
+#kkang_phone-root .msg-row .chat-avatar.avatar-spacer{ width: 28px; height: 1px; }
+/* 같은 사람의 연속 메시지는 간격을 좁혀 한 묶음처럼 보이게 */
+#kkang_phone-root .msg-row.grouped{ margin-top: -3px; }#kkang_phone-root .msg-row .chat-avatar img{ width: 28px; height: 28px; border-radius: 50%; object-fit: cover; display: block; }#kkang_phone-root .msg-row .chat-avatar-default{ width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; }#kkang_phone-root .msg-col{ display: flex; flex-direction: column; min-width: 0; }#kkang_phone-root .msg-row.user .msg-col{ align-items: flex-end; }#kkang_phone-root .msg-row.npc .msg-col{ align-items: flex-start; }#kkang_phone-root .msg-sender{ font-size: 11px; color: var(--text-muted); margin-bottom: 3px; padding: 0 4px; }#kkang_phone-root .msg-bubble{
+  padding: 9px 13px; border-radius: 16px; font-size: 13.5px; line-height: 1.55;
+  max-width: 100%; word-break: break-word; cursor: pointer; transition: opacity 0.12s;
+}#kkang_phone-root .msg-bubble:active{ opacity: 0.75; }#kkang_phone-root .msg-row.user .msg-bubble{ background: var(--bubble-user); color: white; border-bottom-right-radius: 4px; }#kkang_phone-root .msg-row.npc .msg-bubble{ background: var(--bubble-npc); color: var(--text); border-bottom-left-radius: 4px; }#kkang_phone-root .msg-bubble.deleted{ font-style: italic; opacity: 0.55; }#kkang_phone-root .msg-bubble.pending-bubble{ opacity: 0.5; border: 1.5px dashed rgba(255,255,255,0.35); }#kkang_phone-root .msg-bubble.pending-bubble.sticker-only{ opacity: 0.9 !important; background: var(--bubble-npc) !important; border: 1.5px dashed var(--primary) !important; padding: 4px !important; }#kkang_phone-root .msg-meta{ font-size: 10px; color: var(--text-muted); margin-top: 3px; padding: 0 4px; display: flex; gap: 5px; }#kkang_phone-root .chat-input{
+  display: flex; align-items: center; gap: 4px; padding: 8px 8px;
+  background: var(--white); border-top: 1px solid var(--border); flex-shrink: 0;
+}#kkang_phone-root .chat-input input{
+  flex: 1; height: 38px; border: 1px solid var(--border); border-radius: 19px;
+  padding: 0 12px; font-size: 13px; font-family: inherit; outline: none; background: var(--bg);
+  min-width: 0;
+}#kkang_phone-root .chat-input input:focus{ border-color: var(--primary); }#kkang_phone-root .btn-send{
+  width: 36px; height: 36px; border-radius: 50%; background: var(--primary); color: white;
+  border: none; font-size: 14px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; transition: background 0.15s; position: relative;
+}#kkang_phone-root .btn-send:hover{ background: var(--primary-light); }#kkang_phone-root .btn-send:disabled{ background: var(--text-muted); cursor: not-allowed; }#kkang_phone-root .send-badge{
+  position: absolute; top: -4px; right: -4px;
+  min-width: 16px; height: 16px; border-radius: 8px;
+  background: var(--green); color: white; font-size: 9px;
+  font-weight: 700; display: flex; align-items: center;
+  justify-content: center; padding: 0 3px; line-height: 1;
+}#kkang_phone-root .btn-hold{
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-sec); font-size: 14px;
+  font-family: inherit; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}#kkang_phone-root .btn-hold:active{ background: var(--border); }#kkang_phone-root .btn-emoji{
+  width: 34px; height: 34px; background: none; border: none; color: var(--text-sec);
+  font-size: 18px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
+}
+
+/* ===== CALL SCREEN ===== */
+#kkang_phone-root .call-screen{
+  display: flex; flex-direction: column; height: 100%;
+  background: var(--white); color: var(--text);
+}#kkang_phone-root .call-header{ padding: 40px 20px 16px; text-align: center; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }#kkang_phone-root .call-header img,#kkang_phone-root .call-header .call-avatar-big{ margin-bottom: 12px; }#kkang_phone-root .call-header img{ width: 80px; height: 80px; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }#kkang_phone-root .call-avatar-big{
+  width: 80px; height: 80px; border-radius: 50%; background: var(--primary-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 700;
+}#kkang_phone-root .call-name-big{ font-size: 22px; font-weight: 700; color: var(--text); }#kkang_phone-root .call-timer{ font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+/* ===== SUBTITLE CALL ===== */
+#kkang_phone-root .call-subtitle-wrap{
+  flex: 1; position: relative; margin: 8px 12px; border-radius: 14px;
+  background: var(--bg); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+}#kkang_phone-root .call-sub-current{
+  padding: 16px 20px; text-align: center; font-size: 18px; font-weight: 500;
+  line-height: 1.6; width: 100%; transition: opacity 0.5s ease;
+}#kkang_phone-root .call-sub-current.user{ color: var(--primary-dark); }#kkang_phone-root .call-sub-current.npc{ color: var(--text); }#kkang_phone-root .call-sub-current.fade{ opacity: 0; }#kkang_phone-root .call-sub-current.empty{ opacity: 0; }#kkang_phone-root .call-sub-log-btn{
+  position: absolute; top: 10px; right: 12px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(0,0,0,0.08); border: none; color: var(--text-muted);
+  font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}#kkang_phone-root .call-sub-log-btn:hover{ background: rgba(0,0,0,0.15); }
+@keyframes subtitleFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}#kkang_phone-root .call-sub-in{ animation: subtitleFadeIn 0.35s ease; }#kkang_phone-root .call-chat{ flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }#kkang_phone-root .call-chat::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .call-chat::-webkit-scrollbar-thumb{ background: rgba(0,122,255,0.25); border: 2px solid rgba(0,122,255,0.4); border-radius: 2px; }#kkang_phone-root .call-msg{ max-width: 78%; padding: 9px 13px; border-radius: 16px; font-size: 13.5px; line-height: 1.5; }#kkang_phone-root .call-msg.user{ align-self: flex-end; background: rgba(255,255,255,0.18); border-bottom-right-radius: 4px; }#kkang_phone-root .call-msg.npc{ align-self: flex-start; background: rgba(255,255,255,0.12); border-bottom-left-radius: 4px; }#kkang_phone-root .typing-indicator{ display:flex; align-items:center; gap:5px; padding:10px 16px !important; min-height:auto !important; width:fit-content; }#kkang_phone-root .typing-indicator .dot{ width:7px; height:7px; background:rgba(255,255,255,0.5); border-radius:50%; animation:typingBounce 1.2s infinite; }#kkang_phone-root .typing-indicator .dot:nth-child(2){ animation-delay:0.15s; }#kkang_phone-root .typing-indicator .dot:nth-child(3){ animation-delay:0.3s; }#kkang_phone-root .ringing-status{ color: var(--text-sec); font-size:15px; display:flex; flex-direction:column; align-items:center; gap:8px; }#kkang_phone-root .ringing-dot{ width:8px; height:8px; background:var(--primary); border-radius:50%; animation:ringingPulse 1.4s infinite; }#kkang_phone-root .ringing-dot:nth-child(2){ animation-delay:0.2s; }#kkang_phone-root .ringing-dot:nth-child(3){ animation-delay:0.4s; }
+@keyframes ringingPulse { 0%,100%{opacity:0.3;transform:scale(0.8)} 50%{opacity:1;transform:scale(1.2)} }
+@keyframes typingBounce { 0%,60%,100%{transform:translateY(0);opacity:0.3} 30%{transform:translateY(-5px);opacity:1} }#kkang_phone-root .call-input{
+  display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); flex-shrink: 0;
+}#kkang_phone-root .call-input input{
+  flex: 1; height: 38px; border: 1px solid var(--border); border-radius: 19px;
+  padding: 0 14px; font-size: 13.5px; font-family: inherit; outline: none;
+  background: var(--bg); color: var(--text);
+}#kkang_phone-root .call-input input::placeholder{ color: var(--text-muted); }#kkang_phone-root .call-input .btn-send{ background: var(--primary); color: white; }#kkang_phone-root .call-end-bar{ padding: 12px; display: flex; justify-content: center; flex-shrink: 0; }#kkang_phone-root .call-end-btn{
+  width: 56px; height: 56px; border-radius: 50%; background: var(--red); color: white;
+  border: none; font-size: 20px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; box-shadow: 0 4px 12px rgba(192,57,43,0.35);
+  transition: transform 0.15s;
+}#kkang_phone-root .call-end-btn:active{ transform: scale(0.9); }
+/* 통화: 상대가 응답 생성 중 '말하는 중' 인디케이터 + 아바타 펄스(전송버튼 하나로만 알던 것 → 자막칸·아바타에서 명확히) */
+#kkang_phone-root .call-sub-current.speaking{
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  opacity: 1; font-size: 15px; font-weight: 500;
+}#kkang_phone-root .call-speak-row{ display: inline-flex; align-items: center; gap: 10px; }
+#kkang_phone-root .call-sub-userecho{ font-size: 13.5px; font-weight: 500; color: var(--primary-dark); opacity: 0.92; line-height: 1.35; max-width: 100%; }
+#kkang_phone-root .call-speak-label{ color: var(--text-sec); }#kkang_phone-root .call-speak-dots{ display: inline-flex; gap: 4px; }#kkang_phone-root .call-speak-dots .dot{
+  width: 7px; height: 7px; border-radius: 50%; background: var(--primary);
+  animation: typingBounce 1.2s infinite;
+}#kkang_phone-root .call-speak-dots .dot:nth-child(2){ animation-delay: 0.15s; }#kkang_phone-root .call-speak-dots .dot:nth-child(3){ animation-delay: 0.3s; }#kkang_phone-root .call-av.speaking{ animation: callSpeakPulse 1.6s ease-out infinite; }
+@keyframes callSpeakPulse {
+  0%   { box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 0 0 0 rgba(0,122,255,0.45); }
+  70%  { box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 0 0 13px rgba(0,122,255,0); }
+  100% { box-shadow: 0 4px 16px rgba(0,0,0,0.2), 0 0 0 0 rgba(0,122,255,0); }
+}
+
+/* ===== TABS ===== */
+#kkang_phone-root .tab-bar{ display: flex; background: var(--white); border-bottom: 1px solid var(--border); flex-shrink: 0; }#kkang_phone-root .tab-item{
+  flex: 1; padding: 10px; text-align: center; font-size: 13px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+}#kkang_phone-root .tab-item.active{ color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ===== CALL LOG ===== */
+#kkang_phone-root .clog-item{
+  display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+  border-bottom: 1px solid var(--border); background: var(--white);
+}#kkang_phone-root .clog-icon{
+  width: 30px; height: 30px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 12px;
+}#kkang_phone-root .clog-icon.out{ background: rgba(45,122,90,0.1); color: var(--green); }#kkang_phone-root .clog-icon.in{ background: rgba(59,130,246,0.1); color: var(--blue); }#kkang_phone-root .clog-icon.miss{ background: rgba(192,57,43,0.1); color: var(--red); }#kkang_phone-root .clog-info{ flex: 1; }#kkang_phone-root .clog-name{ font-size: 13px; font-weight: 600; color: var(--text); }#kkang_phone-root .clog-detail{ font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+/* ===== SETTINGS ===== */
+#kkang_phone-root .settings-item{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; background: var(--white); border-bottom: 1px solid var(--border);
+}#kkang_phone-root .settings-label{ font-size: 14px; color: var(--text); }#kkang_phone-root .settings-desc{ font-size: 11px; color: var(--text-muted); margin-top: 2px; }#kkang_phone-root .toggle{
+  position: relative; width: 44px; height: 26px; background: var(--border);
+  border-radius: 13px; cursor: pointer; transition: background 0.2s; flex-shrink: 0;
+}#kkang_phone-root .toggle.on{ background: var(--primary); }#kkang_phone-root .toggle::after{
+  content: ''; position: absolute; width: 20px; height: 20px; background: white;
+  border-radius: 50%; top: 3px; left: 3px; transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}#kkang_phone-root .toggle.on::after{ transform: translateX(18px); }#kkang_phone-root .settings-btn{
+  padding: 14px; text-align: center; background: var(--white); color: var(--red);
+  font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 1px solid var(--border);
+}#kkang_phone-root .settings-btn:active{ background: rgba(192,57,43,0.04); }#kkang_phone-root .profile-section{
+  display: flex; flex-direction: column; align-items: center;
+  padding: 24px 16px; background: var(--white);
+  border-bottom: 1px solid var(--border);
+}#kkang_phone-root .profile-avatar{
+  width: 72px; height: 72px; border-radius: 50%;
+  object-fit: cover; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}#kkang_phone-root .profile-avatar-default{
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--primary); display: flex; align-items: center;
+  justify-content: center; color: white; font-size: 28px;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transition: transform 0.15s;
+}#kkang_phone-root .profile-avatar-default:active,#kkang_phone-root .profile-avatar:active{ transform: scale(0.93); }#kkang_phone-root .profile-action{
+  margin-top: 8px; font-size: 12px; color: var(--primary);
+  cursor: pointer; font-weight: 500;
+}#kkang_phone-root .profile-action:active{ opacity: 0.7; }#kkang_phone-root .profile-remove{
+  margin-top: 4px; font-size: 11px; color: var(--red);
+  cursor: pointer;
+}#kkang_phone-root .profile-remove:active{ opacity: 0.7; }
+
+/* ===== STICKER PICKER ===== */
+#kkang_phone-root .emoji-picker{
+  position: absolute; bottom: 54px; left: 0; right: 0; background: var(--white);
+  border-top: 1px solid var(--border); padding: 0; z-index: 5;
+  max-height: 280px; display: flex; flex-direction: column;
+}#kkang_phone-root .emoji-set-tabs{
+  display: flex; gap: 4px; padding: 6px 8px 0;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; overflow-x: auto;
+}#kkang_phone-root .emoji-set-tab{
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  border: 2px solid transparent; cursor: pointer; overflow: hidden;
+  transition: border-color 0.15s; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+}#kkang_phone-root .emoji-set-tab.active{ border-color: var(--primary); }#kkang_phone-root .emoji-set-tab img{ width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }#kkang_phone-root .emoji-set-tab-empty{ font-size: 18px; }#kkang_phone-root .emoji-grid{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; padding: 6px; overflow-y: auto; }#kkang_phone-root .emoji-item{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer; border-radius: 10px; padding: 6px 2px;
+  transition: background 0.12s;
+}#kkang_phone-root .emoji-item:hover{ background: var(--bg); }#kkang_phone-root .emoji-item:active{ transform: scale(0.9); }#kkang_phone-root .emoji-item img{ width: 52px; height: 52px; border-radius: 6px; object-fit: cover; pointer-events: none; }#kkang_phone-root .emoji-item span{ font-size: 10px; color: var(--text-muted); pointer-events: none; }#kkang_phone-root .msg-bubble.sticker-only{ background: transparent !important; padding: 2px !important; }#kkang_phone-root .msg-bubble.sticker-only img{ border-radius: 10px; }#kkang_phone-root .msg-col .msg-bubble + .msg-bubble{ margin-top: 3px; }#kkang_phone-root .msg-bubble.has-card{ padding: 4px; }#kkang_phone-root .msg-sticker-above{ padding: 0 0 4px 0; }#kkang_phone-root .msg-sticker-above img{ width: 100px; height: 100px; border-radius: 8px; display: block; }
+
+/* ===== MODALS ===== */
+#kkang_phone-root #modal-overlay{
+  position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex;
+  align-items: center; justify-content: center; z-index: 60; padding: 20px;
+}#kkang_phone-root .modal-dialog{
+  background: var(--white); border-radius: 16px; padding: 22px; width: 100%;
+  max-width: 340px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  max-height: 100%; overflow-y: auto; /* 모달이 길면(예: OF 크리에이터 설정) 내부 스크롤 → 하단 버튼 잘림/안눌림 방지 */
+  animation: modalIn 0.2s ease-out;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }#kkang_phone-root .modal-title{ font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 14px; }#kkang_phone-root .modal-input{
+  width: 100%; height: 42px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 0 12px; font-size: 14px; font-family: inherit; outline: none; margin-bottom: 14px;
+  background: var(--field-bg); color: var(--field-text);
+}#kkang_phone-root .modal-input::placeholder,#kkang_phone-root .modal-textarea::placeholder{ color: var(--field-ph); }#kkang_phone-root .modal-input:focus{ border-color: var(--primary); }#kkang_phone-root .modal-textarea{
+  width: 100%; height: 76px; border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none;
+  resize: none; margin-bottom: 14px;
+  background: var(--field-bg); color: var(--field-text);
+}#kkang_phone-root .modal-textarea:focus{ border-color: var(--primary); }#kkang_phone-root .modal-body{ font-size: 13px; color: var(--text-sec); margin-bottom: 14px; line-height: 1.5; }#kkang_phone-root .modal-btns{ display: flex; gap: 8px; justify-content: flex-end; }#kkang_phone-root .modal-btn{
+  height: 38px; padding: 0 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  font-family: inherit; cursor: pointer; border: none; transition: opacity 0.15s;
+}#kkang_phone-root .modal-btn:active{ opacity: 0.8; }#kkang_phone-root .modal-btn.primary{ background: var(--primary); color: white; }#kkang_phone-root .modal-btn.secondary{ background: var(--bg); color: var(--text-sec); }#kkang_phone-root .modal-btn.danger{ background: var(--red); color: white; }
+
+/* ===== 통일 폼 컨트롤 (모든 입력/설정 칸 공통) =====
+   목적: 폰 안 모든 input/textarea/select가 테마 토큰(--field-*)에서 색을 읽게 강제.
+   - ST 테마의 전역 input/textarea 스타일(!important 포함)이 폰 안으로 침투해 칸마다 색이
+     제각각 되고 다크에서 안 보이던 문제 차단 → 폰 스코프 + !important 로 항상 우리 색 우선.
+   - 새 입력칸을 추가해도 자동으로 일관(유지보수 포인트 1곳).
+   - 특수 배경 위 입력(라이브=영상/채팅·통화=알약형)은 아래에서 고유 디자인으로 되돌림. */
+#kkang_phone-root input[type="text"],
+#kkang_phone-root input[type="search"],
+#kkang_phone-root input[type="number"],
+#kkang_phone-root input[type="date"],
+#kkang_phone-root input[type="time"],
+#kkang_phone-root input[type="email"],
+#kkang_phone-root input[type="url"],
+#kkang_phone-root input[type="password"],
+#kkang_phone-root input:not([type]),
+#kkang_phone-root textarea,
+#kkang_phone-root select{
+  background-color: var(--field-bg) !important;
+  color: var(--field-text) !important;
+  -webkit-text-fill-color: var(--field-text); /* iOS가 멋대로 회색 처리하는 것 방지 */
+  border-color: var(--field-border) !important;
+}
+#kkang_phone-root input::placeholder,
+#kkang_phone-root textarea::placeholder{ color: var(--field-ph) !important; -webkit-text-fill-color: var(--field-ph); }
+#kkang_phone-root input:focus,
+#kkang_phone-root textarea:focus,
+#kkang_phone-root select:focus{ border-color: var(--primary) !important; }
+
+/* 특수 배경 위 입력 = 위 통일 규칙을 덮어 고유 디자인 유지(동일 특이도 + 뒤 선언 + !important) */
+#kkang_phone-root input.iglive-input{
+  background-color: rgba(0,0,0,0.25) !important;
+  color: #fff !important; -webkit-text-fill-color: #fff;
+  border-color: rgba(255,255,255,0.6) !important;
+}
+#kkang_phone-root .chat-input input,
+#kkang_phone-root .call-input input{
+  background-color: var(--bg) !important;
+  color: var(--text) !important; -webkit-text-fill-color: var(--text);
+  border-color: var(--border) !important;
+}
+
+/* ===== CONTEXT MENU ===== */
+#kkang_phone-root .ctx-menu{
+  position: absolute; background: var(--white); border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15); overflow: hidden; z-index: 25;
+  min-width: 130px; animation: ctxIn 0.12s ease-out;
+}
+@keyframes ctxIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }#kkang_phone-root .ctx-item{
+  padding: 11px 14px; font-size: 13px; color: var(--text); cursor: pointer;
+  border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px;
+}#kkang_phone-root .ctx-item:last-child{ border-bottom: none; }#kkang_phone-root .ctx-item:active{ background: var(--bg); }#kkang_phone-root .ctx-item.danger{ color: var(--red); }
+
+/* ===== LOADING ===== */
+/* ⚠️ 절대 화면 전체를 덮는 차단 오버레이로 되돌리지 말 것!
+   inset:0 + 클릭차단이던 시절: 백그라운드 생성(댓글/프로필/채팅연동)이 돌 때마다 폰 전체 탭이
+   랜덤하게 먹통(메뉴 안 뜸·삭제 안 됨·"됐다 안 됐다") → 비차단 칩으로 변경 (v1.18.2) */
+#kkang_phone-root #loading-overlay{
+  position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  background: rgba(26,26,46,0.92); padding: 8px 14px; border-radius: 18px;
+  z-index: 95; pointer-events: none; white-space: nowrap; max-width: 86%;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25); animation: toastIn 0.25s ease-out;
+}
+#kkang_phone-root #loading-overlay .spinner{
+  width: 14px; height: 14px; border-width: 2px;
+  border-color: rgba(255,255,255,0.3); border-top-color: #fff; flex-shrink: 0;
+}
+#kkang_phone-root #loading-overlay .loading-text{ color: #fff !important; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+#kkang_phone-root .spinner{
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }#kkang_phone-root .loading-text{ font-size: 13px; color: var(--text-sec); }
+/* 색 원·색 배경 버튼 안 아이콘은 항상 흰색 — ST 테마가 FA 색을 덮어써도 유지 (앱 아이콘 규칙 115행과 동일 패턴) */
+#kkang_phone-root .plus-item-icon i, #kkang_phone-root .plus-item-icon svg,
+#kkang_phone-root .btn-send i, #kkang_phone-root .btn-hold i,
+#kkang_phone-root .msg-card-icon i,
+#kkang_phone-root .profile-avatar-default i,
+#kkang_phone-root .chat-avatar-default i,
+#kkang_phone-root .list-unread, #kkang_phone-root .send-badge,
+#kkang_phone-root .of-unlock i, #kkang_phone-root .of-btn.sub i,
+#kkang_phone-root .live-send-btn i, #kkang_phone-root .live-donate-btn i,
+#kkang_phone-root .modal-btn.primary i{
+  color: #fff !important; fill: #fff !important;
+}
+
+/* 게시물 밑 인라인 '댓글 달리는 중' 표시 (인스타/OF/X/커뮤 공용) */
+#kkang_phone-root .kp-cmt-pending{
+  display:flex; align-items:center; gap:7px; padding:8px 14px;
+  font-size:11.5px; color:var(--text-sec);
+}
+#kkang_phone-root .kp-cmt-pending .spinner{ width:13px; height:13px; border-width:2px; }
+
+/* 비차단 미니 로딩 칩 (이미지 생성 등 말풍선 없는 작업용) */
+#kkang_phone-root .mini-loading{
+  position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+  z-index: 60; display: none; align-items: center; gap: 8px;
+  background: rgba(26,26,46,0.9); color: #fff; padding: 8px 14px; border-radius: 18px;
+  font-size: 12px; font-weight: 500; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  animation: toastIn 0.25s ease-out; pointer-events: none;
+}#kkang_phone-root .mini-loading .mini-spinner{
+  width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+
+/* ===== TOAST ===== */
+#kkang_phone-root #kp-toast-container{
+  position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+  z-index: 100; display: flex; flex-direction: column; gap: 6px; align-items: center;
+  width: calc(100% - 24px); pointer-events: none;
+}#kkang_phone-root .toast{
+  background: rgba(26,26,46,0.88); color: white; padding: 9px 18px; border-radius: 16px;
+  font-size: 12px; font-weight: 500; animation: toastIn 0.25s ease-out;
+  white-space: normal; width: fit-content; max-width: 100%; line-height: 1.45; text-align: center; word-break: keep-all;
+}#kkang_phone-root .toast.error{ background: rgba(192,57,43,0.92); cursor: pointer; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ===== EMPTY STATE ===== */
+#kkang_phone-root .empty-state{
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; padding: 40px 20px; color: var(--text-muted);
+}#kkang_phone-root .empty-state i{ font-size: 40px; margin-bottom: 14px; opacity: 0.4; }#kkang_phone-root .empty-state p{ font-size: 13px; text-align: center; line-height: 1.6; }
+
+/* ===== TWITTER / X FEED ===== */
+#kkang_phone-root .tw-top{
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  background: var(--bg); z-index: 5;
+}#kkang_phone-root .tw-top .tw-logo{ font-size: 20px; color: var(--text); }#kkang_phone-root .tw-refresh{
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--text); color: var(--bg); font-size: 13px; font-weight: 700;
+  font-family: inherit; transition: opacity 0.15s;
+}#kkang_phone-root .tw-refresh:disabled{ opacity: 0.55; cursor: default; }#kkang_phone-root .tw-refresh i.fa-spin{ animation: fa-spin 0.9s linear infinite; }
+@keyframes fa-spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }#kkang_phone-root .tw-feed{ display: flex; flex-direction: column; }#kkang_phone-root .tw-card{
+  display: flex; gap: 10px; padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}#kkang_phone-root .tw-card .tw-av{ flex-shrink: 0; }#kkang_phone-root .tw-card .tw-av img{ width: 42px; height: 42px; border-radius: 50%; object-fit: cover; display: block; }#kkang_phone-root .tw-body{ flex: 1; min-width: 0; }#kkang_phone-root .tw-head{ display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }#kkang_phone-root .tw-name{ font-weight: 700; font-size: 14px; color: var(--text); }#kkang_phone-root .tw-verified{ color: #1d9bf0; font-size: 12px; }#kkang_phone-root .tw-handle{ font-size: 13px; color: var(--text-muted); }#kkang_phone-root .tw-dot{ color: var(--text-muted); font-size: 12px; }#kkang_phone-root .tw-time{ font-size: 13px; color: var(--text-muted); }#kkang_phone-root .tw-text{ font-size: 14px; color: var(--text); line-height: 1.5; margin-top: 3px; white-space: pre-wrap; word-break: break-word; }#kkang_phone-root .tw-actions{ display: flex; gap: 28px; margin-top: 9px; color: var(--text-muted); font-size: 13px; }#kkang_phone-root .tw-actions span{ display: inline-flex; align-items: center; gap: 5px; }#kkang_phone-root .tw-del{
+  margin-left: auto; background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; opacity: 0.6; align-self: flex-start;
+}#kkang_phone-root .tw-del:active{ opacity: 1; }
+
+/* ===== TWITTER/X — 목업(트위터2.html) 디자인 적용 ===== */
+#kkang_phone-root .tw-tabs{
+  display: flex; position: sticky; top: 0; z-index: 4;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+}
+/* 트위터 내 프로필 바(닉/아이디 설정) — 피드 맨 위 (v1.19.42) */
+#kkang_phone-root .tw-me{ display:flex; align-items:center; gap:11px; padding:11px 14px; border-bottom:1px solid var(--border); cursor:pointer; }
+#kkang_phone-root .tw-me:active{ background:var(--bg); }
+#kkang_phone-root .tw-me-av{ flex-shrink:0; }
+#kkang_phone-root .tw-me-info{ flex:1; min-width:0; }
+#kkang_phone-root .tw-me-name{ font-size:14px; font-weight:800; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#kkang_phone-root .tw-me-handle{ font-size:12.5px; color:var(--text-muted); }
+#kkang_phone-root .tw-me-edit{ flex-shrink:0; color:var(--text-sec); }
+/* 헤더 내 동그라미 프사 버튼 — 트위터·인스타 공용(클래스명은 tw-hdr-me 유지). 두 앱 프사 크기·동그라미 모양 통일(30px 원형) */
+#kkang_phone-root .tw-hdr-me{ padding:0 1px; display:flex; align-items:center; justify-content:center; }
+#kkang_phone-root .tw-hdr-me img, #kkang_phone-root .tw-hdr-me > div{ width:30px !important; height:30px !important; border-radius:50% !important; object-fit:cover; }
+#kkang_phone-root .tw-tab{
+  flex: 1; text-align: center; padding: 15px 0;
+  font-size: 15px; font-weight: 500; color: var(--text-muted);
+  position: relative;
+}
+#kkang_phone-root .tw-tab.active{ font-weight: 700; color: var(--text); }
+#kkang_phone-root .tw-tab.active::after{
+  content: ''; position: absolute; bottom: 0; left: 50%;
+  transform: translateX(-50%); width: 48px; height: 4px;
+  background: #1d9bf0; border-radius: 4px;
+}
+#kkang_phone-root .tw-card{ gap: 12px; padding: 12px 16px; }
+#kkang_phone-root .tw-card .tw-av img{ width: 40px; height: 40px; }
+#kkang_phone-root .tw-name{ font-size: 15px; }
+#kkang_phone-root .tw-handle,
+#kkang_phone-root .tw-time,
+#kkang_phone-root .tw-dot{ font-size: 14px; }
+#kkang_phone-root .tw-text{ font-size: 15px; line-height: 1.5; margin-top: 2px; }
+
+/* ===== TYPING INDICATOR ===== */
+#kkang_phone-root .typing-indicator{
+  display: flex; align-items: center; gap: 5px; padding: 10px 14px;
+  background: var(--bubble-npc); border-radius: 16px; border-bottom-left-radius: 4px;
+  width: fit-content;
+}#kkang_phone-root .typing-dot{
+  width: 6px; height: 6px; background: var(--text-muted); border-radius: 50%;
+  animation: typingBounce 1.2s infinite;
+}#kkang_phone-root .typing-dot:nth-child(2){ animation-delay: 0.2s; }#kkang_phone-root .typing-dot:nth-child(3){ animation-delay: 0.4s; }
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+/* ===== RETRY BANNER ===== */
+#kkang_phone-root .retry-banner{
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; margin: 4px 14px;
+  background: rgba(192,57,43,0.06); border: 1px solid rgba(192,57,43,0.2);
+  border-radius: 10px; font-size: 12px; color: var(--red);
+}#kkang_phone-root .retry-banner i{ font-size: 13px; flex-shrink: 0; }#kkang_phone-root .retry-banner span{ flex: 1; }#kkang_phone-root .btn-retry{
+  padding: 4px 12px; border-radius: 7px; border: 1px solid var(--red);
+  background: none; color: var(--red); font-size: 11px; font-weight: 700;
+  cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s;
+}#kkang_phone-root .btn-retry:hover{ background: var(--red); color: white; }
+
+/* ===== FAB BUTTON ===== */
+#kkang_phone-root .fab-btn{
+  position: absolute; bottom: 18px; right: 14px;
+  width: 52px; height: 52px; border-radius: 16px;
+  background: var(--primary); color: #fff;
+  border: none; font-size: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,122,255,0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+  z-index: 10;
+}#kkang_phone-root .fab-btn:hover{ transform: scale(1.08); box-shadow: 0 6px 20px rgba(0,122,255,0.5); }#kkang_phone-root .fab-btn:active{ transform: scale(0.95); }
+/* ===== STAR / FAVORITE ===== */
+#kkang_phone-root .fav-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; margin-left:5px; cursor:pointer;
+  color:var(--text-muted); vertical-align:middle; flex-shrink:0;
+  transition:color 0.15s, transform 0.15s;
+}#kkang_phone-root .fav-btn.active{ color:#f59e0b; }#kkang_phone-root .fav-btn:active{ transform:scale(0.8); }
+/* ===== KEYPAD ===== */
+#kkang_phone-root .keypad-wrap{ padding:16px 20px; display:flex; flex-direction:column; align-items:center; gap:12px; }#kkang_phone-root .keypad-display{ font-size:28px; font-weight:300; color:var(--text); letter-spacing:4px; min-height:40px; text-align:center; width:100%; }#kkang_phone-root .keypad-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%; max-width:220px; }#kkang_phone-root .keypad-key{
+  height:52px; border-radius:50%; border:none; background:var(--bg);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  cursor:pointer; transition:background 0.1s; font-family:inherit;
+}#kkang_phone-root .keypad-key:active{ background:var(--border); }#kkang_phone-root .keypad-key .kk-num{ font-size:20px; font-weight:500; color:var(--text); line-height:1; }#kkang_phone-root .keypad-key .kk-name{ font-size:9px; color:var(--text-muted); margin-top:1px; letter-spacing:0.3px; }#kkang_phone-root .keypad-call-row{ display:flex; align-items:center; justify-content:center; gap:24px; width:100%; max-width:220px; }#kkang_phone-root .keypad-call-btn{
+  width:56px; height:56px; border-radius:50%; border:none;
+  background:var(--green); color:#fff; font-size:22px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 4px 12px rgba(45,122,90,0.3); transition:transform 0.15s;
+}#kkang_phone-root .keypad-call-btn:active{ transform:scale(0.92); }#kkang_phone-root .keypad-del-btn{
+  width:44px; height:44px; border-radius:50%; border:none;
+  background:none; color:var(--text-muted); font-size:18px; cursor:pointer;
+}
+/* ===== MSG ANIMATION ===== */
+#kkang_phone-root .msg-slide-in{ animation: msgSlideIn 0.3s ease-out; }
+@keyframes msgSlideIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* 도착하는 말풍선 팝업(스프링) — 카톡식 실시간 도착감 */
+#kkang_phone-root .bubble-pop .msg-bubble{ animation: bubblePop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+@keyframes bubblePop {
+  from { opacity: 0; transform: scale(0.86) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ===== GROUP CHAT ===== */
+#kkang_phone-root .grp-badge{
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--primary-bg); color: var(--primary);
+  padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500;
+}#kkang_phone-root .grp-badge.spy{ background: rgba(231,76,60,0.08); color: #e74c3c; }#kkang_phone-root .member-chip{
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 20px; font-size: 12px;
+}#kkang_phone-root .member-chip .kick-btn{
+  color: var(--text-muted); cursor: pointer; font-size: 11px; margin-left: 4px;
+  width: 22px; height: 22px; display: inline-flex; align-items: center;
+  justify-content: center; border-radius: 50%; transition: all 0.15s; flex-shrink: 0;
+}#kkang_phone-root .member-chip .kick-btn:hover{ color: #e74c3c; background: rgba(192,57,43,0.08); }
+
+/* ===== MENTION ===== */
+#kkang_phone-root .mention-tag{
+  background: rgba(0,122,255,0.12); color: var(--primary);
+  padding: 2px 6px; border-radius: 5px; font-weight: 600; font-size: 0.92em;
+}#kkang_phone-root .msg-row.user .mention-tag{
+  background: rgba(255,255,255,0.22); color: #ffffff;
+}#kkang_phone-root .mention-picker{
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 12px 12px 0 0; max-height: 160px; overflow-y: auto;
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.12); z-index: 20; display: none;
+}#kkang_phone-root .mention-picker.show{ display: block; }#kkang_phone-root .mention-item{
+  padding: 10px 16px; cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; gap: 8px;
+}#kkang_phone-root .mention-item:hover{ background: var(--primary-bg); }
+
+/* ===== GROUP MODAL ===== */
+#kkang_phone-root .grp-overlay{
+  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }#kkang_phone-root .grp-modal{
+  background: var(--card-bg); border-radius: 20px; padding: 22px;
+  width: 88%; max-width: 360px; max-height: 78vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  animation: modalIn 0.2s ease-out;
+}#kkang_phone-root .grp-modal::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .grp-modal::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.1); border-radius: 2px; }#kkang_phone-root .grp-modal h3{ font-size: 16px; font-weight: 700; margin-bottom: 18px; color: var(--text); }#kkang_phone-root .grp-field{ margin-bottom: 16px; }#kkang_phone-root .grp-field label{ font-size: 12px; color: var(--text-sec); display: block; margin-bottom: 8px; font-weight: 500; }#kkang_phone-root .grp-field input[type="text"]{
+  width: 100%; padding: 11px 14px; border: 1.5px solid var(--border);
+  border-radius: 12px; font-size: 13px; background: var(--bg);
+  color: var(--text); box-sizing: border-box; transition: border-color 0.15s;
+  font-family: inherit;
+}#kkang_phone-root .grp-field input[type="text"]:focus{ border-color: var(--primary); outline: none; }#kkang_phone-root .grp-field input[type="text"]::placeholder{ color: var(--text-muted); }#kkang_phone-root .member-check-list{
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 200px; overflow-y: auto; padding: 2px 0;
+}#kkang_phone-root .member-check-list::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .member-check-list::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.1); border-radius: 2px; }#kkang_phone-root .member-check{
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-radius: 12px; cursor: pointer; font-size: 13px;
+  transition: all 0.15s; border: 1.5px solid transparent;
+  user-select: none;
+}#kkang_phone-root .member-check:hover{ background: var(--primary-bg); }#kkang_phone-root .member-check.selected{
+  background: var(--primary-bg); border-color: var(--primary);
+}#kkang_phone-root .member-check.selected::after{
+  content: '\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+  font-size: 11px; color: var(--primary); margin-left: auto;
+}#kkang_phone-root .spy-toggle{
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 0; border-top: 1px solid var(--border); margin-top: 10px;
+}#kkang_phone-root .spy-toggle label{ font-size: 13px; display: flex; align-items: center; gap: 8px; color: var(--text); }#kkang_phone-root .spy-toggle input[type="checkbox"]{ accent-color: var(--primary); width: 16px; height: 16px; }#kkang_phone-root .grp-actions{ display: flex; gap: 10px; margin-top: 20px; }#kkang_phone-root .grp-actions button{
+  flex: 1; padding: 11px; border-radius: 12px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: opacity 0.15s;
+}#kkang_phone-root .grp-actions button:active{ opacity: 0.8; }#kkang_phone-root .btn-grp-cancel{ background: var(--bg); color: var(--text-sec); }#kkang_phone-root .btn-grp-ok{ background: var(--primary); color: white; }
+
+/* ===== GROUP SETTINGS PANEL ===== */
+#kkang_phone-root .grp-settings{
+  position: absolute; top: 0; right: 0; bottom: 0; width: 78%;
+  background: var(--card-bg); box-shadow: -6px 0 24px rgba(0,0,0,0.12);
+  z-index: 25; padding: 20px; overflow-y: auto;
+  animation: grpSlideIn 0.25s ease-out;
+  border-left: 1px solid var(--border);
+}#kkang_phone-root .grp-settings::-webkit-scrollbar{ width: 3px; }#kkang_phone-root .grp-settings::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.1); border-radius: 2px; }
+@keyframes grpSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }#kkang_phone-root .grp-input-wrap{ position: relative; }#kkang_phone-root .btn-danger-full{
+  width: 100%; padding: 11px; background: rgba(192,57,43,0.08); color: var(--red);
+  border: 1.5px solid rgba(192,57,43,0.2); border-radius: 12px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  margin-top: 14px; transition: all 0.15s; display: flex; align-items: center;
+  justify-content: center; gap: 6px;
+}#kkang_phone-root .btn-danger-full:hover{ background: rgba(192,57,43,0.15); }#kkang_phone-root .btn-danger-full:active{ opacity: 0.8; }
+
+/* ===== SYSTEM BADGE ===== */
+#kkang_phone-root .sys-badge{
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 14px; margin: 8px auto; width: fit-content;
+  background: var(--primary-bg); color: var(--primary);
+  border-radius: 14px; font-size: 11px; font-weight: 500;
+  max-width: 85%;
+}#kkang_phone-root .sys-badge i{ font-size: 10px; flex-shrink: 0; }#kkang_phone-root .sys-badge.warn{ background: rgba(231,76,60,0.08); color: #e74c3c; }#kkang_phone-root .sys-badge.info{ background: rgba(59,130,246,0.08); color: #3B82F6; }
+
+/* ===== NOTIFICATION BANNER (#5) ===== */
+#kkang_phone-root .notif-banner{
+  position: absolute; top: 42px; left: 8px; right: 8px; z-index: 35;
+  background: var(--white); border-radius: 14px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+  animation: notifSlide 0.35s ease-out;
+  cursor: pointer; overflow: hidden;
+  border: 1px solid var(--border);
+}
+@keyframes notifSlide { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }#kkang_phone-root .notif-banner .notif-icon{ width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;flex-shrink:0; }#kkang_phone-root .notif-banner .notif-body{ flex:1;min-width:0; }#kkang_phone-root .notif-banner .notif-title{ font-size:12px;font-weight:700;color:var(--text); }#kkang_phone-root .notif-banner .notif-preview{ font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px; }#kkang_phone-root .notif-banner .notif-close{ width:24px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;cursor:pointer;flex-shrink:0; }
+
+/* ===== INCOMING CALL (#6) ===== */
+#kkang_phone-root .ic-banner{
+  position:absolute; top:42px; left:8px; right:8px; z-index:45;
+  background:linear-gradient(135deg, #2d8f5e 0%, #1a5c3a 100%);
+  border-radius:14px; padding:12px 14px;
+  display:flex; align-items:center; gap:10px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.25);
+  animation:notifSlide 0.35s ease-out; color:white;
+}#kkang_phone-root .ic-banner-info{ flex:1;min-width:0; }#kkang_phone-root .ic-banner-name{ font-size:14px;font-weight:700; }#kkang_phone-root .ic-banner-label{ font-size:11px;opacity:0.8; }#kkang_phone-root .ic-banner-btns{ display:flex;gap:10px;flex-shrink:0; }#kkang_phone-root .ic-banner-btn{ width:36px;height:36px;border-radius:50%;border:none;color:white;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center; }#kkang_phone-root .ic-btn:active{ transform:scale(0.9); }#kkang_phone-root .ic-banner-btn.accept{ background:var(--green);box-shadow:0 4px 16px rgba(45,122,90,0.4); }#kkang_phone-root .ic-banner-btn.reject{ background:var(--red);box-shadow:0 4px 16px rgba(192,57,43,0.4); }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+
+/* ===== REPLY QUOTE (#11) ===== */
+#kkang_phone-root .reply-preview{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:rgba(0,122,255,0.06);border-left:3px solid var(--primary);
+  border-radius:0 8px 8px 0;margin-bottom:0;
+  animation:replyIn 0.15s ease-out;
+}
+@keyframes replyIn { from{opacity:0;height:0;padding:0} to{opacity:1} }#kkang_phone-root .reply-preview .reply-text{ flex:1;font-size:11px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }#kkang_phone-root .reply-preview .reply-close{ cursor:pointer;color:var(--text-muted);font-size:12px; }#kkang_phone-root .msg-quote{
+  font-size:11px;padding:5px 8px;margin-bottom:4px;
+  background:rgba(0,0,0,0.04);border-left:2px solid var(--primary);
+  border-radius:0 6px 6px 0;color:var(--text-sec);
+  max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}#kkang_phone-root .msg-row.user .msg-quote{ background:rgba(255,255,255,0.12);border-left-color:rgba(255,255,255,0.5);color:rgba(255,255,255,0.75); }
+
+/* ===== PLUS MENU (#8) ===== */
+#kkang_phone-root .plus-menu{
+  position:absolute;bottom:54px;left:0;right:0;background:var(--white);
+  border-top:1px solid var(--border);padding:12px 8px;z-index:5;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+  animation:plusMenuIn 0.2s ease-out;
+}
+@keyframes plusMenuIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }#kkang_phone-root .plus-item{ display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;padding:8px 4px;border-radius:10px; }#kkang_phone-root .plus-item:active{ background:var(--bg); }#kkang_phone-root .plus-item-icon{ width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;color:white; }#kkang_phone-root .plus-item-label{ font-size:10px;color:var(--text-sec);font-weight:500; }
+
+/* ===== THEME (#9) ===== */
+#kkang_phone-root .theme-picker{ display:flex;gap:10px;padding:4px 0; }#kkang_phone-root .theme-dot{
+  width:32px;height:32px;border-radius:50%;cursor:pointer;
+  border:2px solid transparent;transition:all 0.15s;
+  display:flex;align-items:center;justify-content:center;
+}#kkang_phone-root .theme-dot.active{ border-color:var(--text);transform:scale(1.15); }#kkang_phone-root .theme-dot:active{ transform:scale(0.9); }
+/* 라이트/다크 모드 스위치 */
+#kkang_phone-root .mode-switch{ display:flex; gap:8px; }
+#kkang_phone-root .mode-btn{ flex:1; display:flex; align-items:center; justify-content:center; gap:7px; height:44px; border:1.5px solid var(--border); border-radius:12px; background:var(--bg); color:var(--text-sec); font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .14s; }
+#kkang_phone-root .mode-btn i{ font-size:15px; }
+#kkang_phone-root .mode-btn:hover{ border-color:var(--primary); }
+#kkang_phone-root .mode-btn.active{ background:var(--primary-bg); border-color:var(--primary); color:var(--primary); }
+
+/* ===== GROUP PROFILE MOSAIC (#10) ===== */
+#kkang_phone-root .grp-avatar-mosaic{
+  width:42px;height:42px;border-radius:50%;overflow:hidden;
+  display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  flex-shrink:0;border:1px solid var(--border);background:var(--bg);
+}#kkang_phone-root .grp-avatar-mosaic img,#kkang_phone-root .grp-avatar-mosaic .mini-av{
+  width:100%;height:100%;object-fit:cover;
+}#kkang_phone-root .grp-avatar-mosaic .mini-av{
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;color:white;
+}
+/* 관전(spy) 그룹 표시 = 우하단 작은 눈 배지(아바타는 일반 그룹과 동일한 원형 모자이크 유지) */
+#kkang_phone-root .grp-spy-dot{
+  position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:50%;
+  background:#e74c3c;color:#fff;display:flex;align-items:center;justify-content:center;
+  font-size:9px;border:2px solid var(--white);
+}
+/* 관전 그룹 빈 화면: 시스템 뱃지 아래 안내문(하단 🔄 버튼 눌러 불러오기) */
+#kkang_phone-root .grp-spy-hint{ text-align:center; font-size:12px; color:var(--text-muted); padding:18px 20px; line-height:1.6; }#kkang_phone-root .grp-spy-hint i{ color:var(--primary); }
+
+/* ===== PHOTO PREVIEW (#8) ===== */
+#kkang_phone-root .photo-preview-wrap{
+  position:relative;max-width:180px;margin:4px 0;
+}#kkang_phone-root .photo-preview-wrap img{
+  width:100%;border-radius:10px;display:block;
+}#kkang_phone-root .photo-desc{
+  font-size:11px;color:var(--text-sec);margin-top:3px;
+  font-style:italic;
+}#kkang_phone-root .msg-bubble .photo-preview-wrap img{ border-radius:8px; }
+
+
+/* ===== MESSAGE CARDS ===== */
+#kkang_phone-root .msg-card{
+  border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;min-width:160px;cursor:default;
+  background:var(--card-bg, #ffffff);border:1px solid var(--border, #e5e7eb);box-shadow:0 1px 3px rgba(0,0,0,0.06);
+}#kkang_phone-root .msg-card-icon{
+  width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;flex-shrink:0;
+}#kkang_phone-root .msg-card-text{
+  font-size:12px;line-height:1.4;font-weight:600;color:var(--text, #1a1a1a);
+}#kkang_phone-root .msg-card-sub{
+  font-size:10px;color:var(--text-sec, #666);margin-top:2px;
+}#kkang_phone-root .msg-card.photo-card{
+  background:var(--card-bg, #ffffff);
+}#kkang_phone-root .msg-card.photo-card.has-real-photo{
+  flex-direction:column;align-items:stretch;padding:0;overflow:hidden;border:none;box-shadow:none;background:transparent;
+}#kkang_phone-root .msg-card.photo-card.has-real-photo .msg-card-thumb{
+  width:100%;height:auto;max-height:240px;border-radius:14px;
+}#kkang_phone-root .has-card{ position:relative; }#kkang_phone-root .regen-overlay{
+  position:absolute;bottom:7px;right:7px;width:34px;height:34px;
+  border-radius:50%;background:rgba(0,0,0,0.62);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;transition:transform 0.15s,background 0.15s;
+  opacity:1;z-index:5;border:1.5px solid rgba(255,255,255,0.9);
+  box-shadow:0 2px 7px rgba(0,0,0,0.45);
+}#kkang_phone-root .regen-overlay:hover{ background:rgba(0,0,0,0.78);transform:scale(1.08); }#kkang_phone-root .regen-overlay:active{ transform:scale(0.9); }
+#kkang_phone-root .photo-recognizing{
+  position:absolute;inset:0;border-radius:10px;
+  background:rgba(0,0,0,0.45);color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  font-size:11px;font-weight:600;z-index:4;pointer-events:none;
+}#kkang_phone-root .photo-recognizing .mini-spinner{ width:22px;height:22px;border-width:2.5px; }#kkang_phone-root .msg-card.photo-card .msg-card-icon{ background:linear-gradient(135deg,#8B5CF6,#3B82F6); }#kkang_phone-root .msg-card.location-card{
+  background:var(--card-bg, #ffffff);
+}#kkang_phone-root .msg-card.location-card .msg-card-icon{ background:linear-gradient(135deg,#EF4444,#F97316); }#kkang_phone-root .msg-card.appt-card{
+  background:var(--card-bg, #ffffff);
+}#kkang_phone-root .msg-card.appt-card .msg-card-icon{ background:linear-gradient(135deg,#F59E0B,#EAB308); }
+/* ===== GIFT CARD ===== */
+#kkang_phone-root .gift-card-wrap{ border-radius:14px;overflow:hidden;width:180px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);border:1px solid rgba(0,0,0,0.06); }#kkang_phone-root .gift-card-img{ height:90px;display:flex;align-items:center;justify-content:center;font-size:44px;position:relative; }#kkang_phone-root .gift-card-img-label{ position:absolute;top:7px;left:10px;font-size:8px;font-weight:700;letter-spacing:1px; }#kkang_phone-root .gift-card-body{ padding:7px 10px 5px; }#kkang_phone-root .gift-card-title{ font-size:11px;font-weight:800;color:#1e293b;text-align:center;background:#f1f5f9;border-radius:20px;padding:3px 8px;margin-bottom:4px;border:1.5px solid #e2e8f0; }#kkang_phone-root .gift-card-brand{ font-size:10px;color:#64748b;text-align:center; }#kkang_phone-root .gift-card-bc{ padding:5px 10px 3px;border-top:1px dashed #e2e8f0; }#kkang_phone-root .gift-card-bar{ height:24px;background:repeating-linear-gradient(90deg,#1e293b 0,#1e293b 1.5px,transparent 1.5px,transparent 3px,#1e293b 3px,#1e293b 4px,transparent 4px,transparent 7px,#1e293b 7px,#1e293b 8px,transparent 8px,transparent 11px);border-radius:1px;margin-bottom:2px;opacity:0.7; }#kkang_phone-root .gift-card-num{ font-size:8px;font-family:monospace;color:#94a3b8;text-align:center;letter-spacing:1px; }#kkang_phone-root .gift-card-footer{ display:flex;justify-content:space-between;align-items:center;padding:2px 10px 6px; }#kkang_phone-root .gift-card-tag{ font-size:8px;font-weight:700;padding:2px 7px;border-radius:8px; }#kkang_phone-root .gift-card-issuer{ font-size:8px;color:#cbd5e1;font-weight:700;letter-spacing:0.5px; }
+/* ── 기프티콘 카드 개편 (품목별, 리얼 바코드 + 메타) ── */
+#kkang_phone-root .gift-card-wrap{ width:196px!important; background:#fff!important; border:1px solid #ececec!important; }
+#kkang_phone-root .gift-card-img{ height:108px!important; }
+#kkang_phone-root .gift-card-emoji{ font-size:54px; line-height:1; filter:drop-shadow(0 3px 6px rgba(0,0,0,0.12)); }
+#kkang_phone-root .gift-card-img-label{ top:8px!important; left:11px!important; }
+#kkang_phone-root .gift-card-body{ padding:11px 13px 10px!important; }
+#kkang_phone-root .gift-card-brand{ font-size:10px!important; color:#9aa0a6!important; font-weight:600; text-align:center; margin-bottom:3px; }
+#kkang_phone-root .gift-card-title{ font-size:12.5px!important; font-weight:800!important; color:#1f2937!important; text-align:center; background:none!important; border:none!important; padding:0!important; margin-bottom:11px!important; line-height:1.3; }
+#kkang_phone-root .gift-card-bc{ background:#f6f7f9!important; border:none!important; border-radius:10px; padding:9px 10px!important; cursor:pointer; transition:background .15s; }
+#kkang_phone-root .gift-card-bc:active{ background:#eef0f3!important; }
+#kkang_phone-root .gift-card-bc-hint{ font-size:8.5px; color:#9aa0a6; text-align:center; margin-bottom:6px; }
+#kkang_phone-root .gift-card-bar{ height:34px!important; opacity:0.92!important; border-radius:2px; margin-bottom:6px!important; background:repeating-linear-gradient(90deg,#1a1a1a 0,#1a1a1a 2px,#fff 2px,#fff 4px,#1a1a1a 4px,#1a1a1a 5px,#fff 5px,#fff 8px,#1a1a1a 8px,#1a1a1a 11px,#fff 11px,#fff 13px,#1a1a1a 13px,#1a1a1a 14px,#fff 14px,#fff 17px)!important; }
+#kkang_phone-root .gift-card-num{ font-size:10px!important; font-family:'Courier New',monospace; color:#333!important; text-align:center; letter-spacing:2px!important; font-weight:700; }
+#kkang_phone-root .gift-card-meta{ margin-top:11px; display:flex; flex-direction:column; gap:5px; }
+#kkang_phone-root .gift-meta-row{ display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#9aa0a6; }
+#kkang_phone-root .gift-meta-row b{ color:#4b5563; font-weight:600; }
+#kkang_phone-root .gift-meta-exp{ color:#e65f3e!important; font-weight:700!important; }
+#kkang_phone-root .gift-card-footer{ padding:8px 13px 10px!important; border-top:1px solid #f1f1f1; }
+#kkang_phone-root .gift-card-issuer{ color:#c4c8ce!important; }
+/* 바코드 확대 모달 */
+#kkang_phone-root .bc-modal{ text-align:center; }
+#kkang_phone-root .bc-modal-title{ font-size:14px; font-weight:700; color:var(--text); margin-bottom:20px; }
+#kkang_phone-root .bc-modal-bar{ height:96px; border-radius:4px; margin:0 0 16px; background:repeating-linear-gradient(90deg,#000 0,#000 3px,#fff 3px,#fff 6px,#000 6px,#000 10px,#fff 10px,#fff 14px,#000 14px,#000 16px,#fff 16px,#fff 22px,#000 22px,#000 27px,#fff 27px,#fff 31px); }
+#kkang_phone-root .bc-modal-num{ font-size:20px; letter-spacing:5px; font-weight:800; color:var(--text); font-family:'Courier New',monospace; }
+#kkang_phone-root .msg-card-thumb{
+  width:104px;height:104px;border-radius:10px;object-fit:cover;flex-shrink:0;cursor:pointer;
+  transition:transform 0.15s;
+}#kkang_phone-root .msg-card-thumb:hover{ transform:scale(1.03); }#kkang_phone-root .msg-card-thumb[src=""]{ display:none; }#kkang_phone-root .photo-viewer-overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);
+  display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;
+  animation:fadeIn 0.15s ease;
+}#kkang_phone-root .photo-viewer-overlay img{
+  max-width:90%;max-height:85%;border-radius:12px;object-fit:contain;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+}#kkang_phone-root .photo-viewer-close{
+  position:absolute;top:12px;right:16px;color:white;font-size:24px;cursor:pointer;
+  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.15);border-radius:50%;
+}
+/* Photo send tab UI */
+#kkang_phone-root .photo-tab-bar{
+  display:flex;gap:0;margin-bottom:12px;border-radius:10px;overflow:hidden;
+  border:1.5px solid var(--border);
+  min-width:0;
+}#kkang_phone-root .photo-tab{
+  flex:1;padding:9px 4px;text-align:center;font-size:11.5px;font-weight:600;
+  cursor:pointer;transition:all 0.15s;color:var(--text-sec);background:var(--bg);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;
+}#kkang_phone-root .photo-tab.active{
+  background:var(--primary);color:white;
+}#kkang_phone-root .photo-tab i{ margin-right:4px; }#kkang_phone-root .photo-panel{ min-height:80px; }#kkang_phone-root .photo-drop-zone{
+  border:2px dashed var(--border);border-radius:12px;padding:20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:border-color 0.15s;min-height:100px;
+}#kkang_phone-root .photo-drop-zone:hover{ border-color:var(--primary); }#kkang_phone-root .ai-gen-input{
+  width:100%;box-sizing:border-box;border:1.5px solid var(--border);border-radius:10px;
+  padding:10px 12px;font-size:13px;background:var(--bg);color:var(--text);
+  resize:vertical;min-height:70px;max-height:140px;font-family:inherit;
+}#kkang_phone-root .ai-gen-input:focus{ outline:none;border-color:var(--primary); }#kkang_phone-root .ai-gen-preview{
+  display:none;width:100%;max-height:200px;object-fit:contain;
+  border-radius:10px;margin-top:10px;border:1px solid var(--border);
+}#kkang_phone-root .ai-gen-loading{
+  display:flex;align-items:center;gap:8px;justify-content:center;
+}
+/* ===== MOBILE RESPONSIVE ===== */
+@media (max-width: 420px) {#kkang_phone-root .phone-frame{
+    height: 100%; /* 고정 580px 금지 — root(dvh)가 높이 진실. 고정값이면 모바일 가시영역보다 커서 홈버튼/모달 하단이 잘렸음 */
+    border-radius: 20px;
+  }#kkang_phone-root .modal-dialog{
+    max-width: calc(100% - 16px);
+    padding: 18px;
+    margin: 0 8px;
+  }#kkang_phone-root .photo-tab-bar{
+    border-radius: 8px;
+  }#kkang_phone-root .photo-tab{
+    padding: 8px 2px;
+    font-size: 10.5px;
+    letter-spacing: -0.3px;
+  }#kkang_phone-root .photo-tab i{
+    display: none;
+  }#kkang_phone-root .ai-gen-input{
+    min-height: 65px;
+    font-size: 12.5px;
+    padding: 8px 10px;
+  }#kkang_phone-root .modal-title{
+    font-size: 15px;
+  }#kkang_phone-root .modal-textarea{
+    height: 68px;
+    font-size: 13px;
+  }#kkang_phone-root .modal-input{
+    height: 38px;
+    font-size: 13px;
+  }#kkang_phone-root .modal-btn{
+    height: 36px;
+    padding: 0 14px;
+    font-size: 12.5px;
+  }#kkang_phone-root .chat-input{
+    gap: 3px;
+    padding: 6px 6px;
+  }#kkang_phone-root .chat-input input{
+    height: 36px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }#kkang_phone-root .btn-send{
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }#kkang_phone-root .btn-hold{
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+  }#kkang_phone-root .btn-emoji{
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
+  }#kkang_phone-root .btn-icon{
+    width: 32px;
+    height: 32px;
+    font-size: 15px;
+  }#kkang_phone-root .s-header{
+    height: 48px;
+    padding: 0 8px;
+  }#kkang_phone-root .s-header h2{
+    font-size: 15px;
+  }#kkang_phone-root .plus-menu{
+    padding: 10px 6px;
+    gap: 4px;
+  }#kkang_phone-root .plus-item-icon{
+    width: 40px;
+    height: 40px;
+    font-size: 15px;
+  }#kkang_phone-root .plus-item-label{
+    font-size: 9.5px;
+  }#kkang_phone-root .emoji-picker{
+    max-height: 220px;
+    padding: 6px;
+  }#kkang_phone-root .emoji-item img{
+    width: 46px;
+    height: 46px;
+  }#kkang_phone-root .emoji-item span{
+    font-size: 9px;
+  }#kkang_phone-root .emoji-item{
+    padding: 4px 1px;
+  }#kkang_phone-root .grp-modal{
+    width: 94%;
+    padding: 18px;
+  }#kkang_phone-root .grp-settings{
+    width: 85%;
+    padding: 16px;
+  }#kkang_phone-root .photo-drop-zone{
+    padding: 14px;
+    min-height: 80px;
+  }#kkang_phone-root .chat-area{
+    padding: 10px 10px;
+  }#kkang_phone-root .msg-bubble{
+    padding: 8px 11px;
+    font-size: 13px;
+  }#kkang_phone-root .msg-row{
+    max-width: 88%;
+  }#kkang_phone-root .call-input{
+    gap: 4px;
+    padding: 6px 8px;
+  }#kkang_phone-root .call-input input{
+    height: 36px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }#kkang_phone-root .status-bar{
+    height: 36px;
+    padding: 0 14px;
+    font-size: 12px;
+  }#kkang_phone-root .notif-banner{
+    left: 6px;
+    right: 6px;
+    padding: 10px 12px;
+  }#kkang_phone-root #modal-overlay{
+    padding: 12px;
+  }#kkang_phone-root .ctx-menu{
+    min-width: 110px;
+  }#kkang_phone-root .ctx-item{
+    padding: 9px 12px;
+    font-size: 12px;
+  }#kkang_phone-root .list-item{
+    padding: 10px 12px;
+    gap: 10px;
+  }#kkang_phone-root .list-name{
+    font-size: 13px;
+  }#kkang_phone-root .list-preview{
+    font-size: 11.5px;
+  }#kkang_phone-root .member-check{
+    padding: 8px 10px;
+    font-size: 12px;
+  }#kkang_phone-root .grp-field input[type="text"]{
+    padding: 9px 12px;
+    font-size: 12px;
+  }#kkang_phone-root .settings-item{
+    padding: 12px 14px;
+  }#kkang_phone-root .settings-label{
+    font-size: 13px;
+  }#kkang_phone-root .call-header{
+    padding: 30px 16px 12px;
+  }#kkang_phone-root .call-name-big{
+    font-size: 20px;
+  }#kkang_phone-root .call-end-btn{
+    width: 50px;
+    height: 50px;
+    font-size: 18px;
+  }#kkang_phone-root .incoming-call-btns{
+    gap: 32px;
+  }#kkang_phone-root .ic-btn{
+    width: 56px;
+    height: 56px;
+    font-size: 20px;
+  }#kkang_phone-root .home-time{
+    font-size: 44px;
+  }#kkang_phone-root .home-date{
+    font-size: 13px;
+    margin-bottom: 36px;
+  }#kkang_phone-root .app-grid{
+    gap: 20px;
+    max-width: 230px;
+  }#kkang_phone-root .app-icon-wrap{
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    font-size: 20px;
+  }#kkang_phone-root .app-label{
+    font-size: 11px;
+  }#kkang_phone-root .profile-section{
+    padding: 18px 14px;
+  }#kkang_phone-root .msg-card{
+    min-width: 140px;
+    padding: 8px 10px;
+  }#kkang_phone-root .photo-viewer-overlay img{
+    max-width: 95%;
+    max-height: 80%;
+  }#kkang_phone-root .photo-panel{
+    min-height: 70px;
+  }#kkang_phone-root .modal-btns{
+    gap: 6px;
+  }#kkang_phone-root .reply-preview{
+    padding: 5px 8px;
+  }#kkang_phone-root .tab-item{
+    padding: 8px;
+    font-size: 12px;
+  }}
+@media (max-width: 340px) {#kkang_phone-root .phone-frame{
+    border-radius: 16px;
+  }#kkang_phone-root .photo-tab{
+    padding: 7px 1px;
+    font-size: 10px;
+  }#kkang_phone-root .chat-input{
+    gap: 2px;
+    padding: 5px 4px;
+  }#kkang_phone-root .chat-input input{
+    height: 34px;
+    padding: 0 8px;
+    font-size: 12px;
+  }#kkang_phone-root .btn-send{
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }#kkang_phone-root .btn-hold{
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }#kkang_phone-root .btn-emoji{
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+  }#kkang_phone-root .modal-dialog{
+    padding: 14px;
+  }#kkang_phone-root .emoji-item img{
+    width: 40px;
+    height: 40px;
+  }#kkang_phone-root .s-header h2{
+    font-size: 14px;
+  }#kkang_phone-root .msg-bubble{
+    font-size: 12.5px;
+    padding: 7px 10px;
+  }}#kkang_phone-root .gallery-overlay{
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--bg);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}#kkang_phone-root .gallery-header{
+  display: flex;
+  align-items: center;
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}#kkang_phone-root .gallery-header h3{
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}#kkang_phone-root .gallery-body{
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}#kkang_phone-root .gallery-grid{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+}#kkang_phone-root .gallery-thumb{
+  aspect-ratio: 1;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+}#kkang_phone-root .gallery-thumb img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.15s;
+}#kkang_phone-root .gallery-thumb:active img{
+  transform: scale(0.93);
+  opacity: 0.8;
+}#kkang_phone-root .gallery-empty{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 12px;
+  color: var(--text-sec);
+  font-size: 13px;
+}#kkang_phone-root .gallery-empty i{
+  font-size: 36px;
+  opacity: 0.3;
+}
+
+/* ===== 연락처 행 아바타: 작은 원 강제 (타원/확대 방지) ===== */
+#kkang_phone-root .ct-av{width:36px!important;height:36px!important;min-width:36px!important;max-width:36px!important;border-radius:50%!important;object-fit:cover;flex-shrink:0;aspect-ratio:1/1;overflow:hidden;font-size:13px!important;line-height:1!important;}
+/* ===== 메시지/DM 목록 아바타: 42px 원 강제 (타원 방지) ===== */
+#kkang_phone-root .la-av{width:42px!important;height:42px!important;min-width:42px!important;max-width:42px!important;border-radius:50%!important;object-fit:cover;flex-shrink:0;aspect-ratio:1/1;overflow:hidden;line-height:1!important;}
+
+/* ===== 트위터 상호작용 버튼 + 답글 ===== */
+#kkang_phone-root .tw-actions .tw-act{background:none;border:none;padding:2px 0;margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:5px;color:var(--text-muted);font-size:13px;transition:color .12s;}
+#kkang_phone-root .tw-actions .tw-act:hover{color:#1d9bf0;}
+#kkang_phone-root .tw-actions .tw-rt:hover{color:#00ba7c;}
+#kkang_phone-root .tw-actions .tw-like:hover{color:#f91880;}
+#kkang_phone-root .tw-actions .tw-like.on{color:#f91880;}
+#kkang_phone-root .tw-actions .tw-rt.on{color:#00ba7c;}
+#kkang_phone-root .tw-replies{margin-top:8px;border-top:1px solid var(--border);padding-top:6px;display:flex;flex-direction:column;gap:8px;}
+#kkang_phone-root .tw-reply{display:flex;gap:8px;}
+#kkang_phone-root .tw-reply-av{flex-shrink:0;}
+#kkang_phone-root .tw-reply-body{flex:1;min-width:0;}
+#kkang_phone-root .tw-reply-head{display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+#kkang_phone-root .tw-reply-name{font-weight:700;font-size:12.5px;color:var(--text);}
+#kkang_phone-root .tw-reply-handle{font-size:11.5px;color:var(--text-muted);}
+#kkang_phone-root .tw-reply-text{font-size:12.5px;color:var(--text);line-height:1.45;margin-top:1px;white-space:pre-wrap;word-break:break-word;}
+#kkang_phone-root .tw-reply-actions{margin-top:3px;color:var(--text-muted);font-size:11.5px;}
+#kkang_phone-root .tw-reply-actions span{display:inline-flex;align-items:center;gap:4px;}
+
+/* 답글 하트 버튼 */
+#kkang_phone-root .tw-reply-actions .tw-rlike{background:none;border:none;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:var(--text-muted);font-size:11.5px;}
+#kkang_phone-root .tw-reply-actions .tw-rlike.on{color:#e0245e;}
+#kkang_phone-root .tw-card{cursor:pointer;}
+
+/* ===== 트윗 상세(스레드) 뷰 ===== */
+#kkang_phone-root .tw-detail{padding:14px 16px;border-bottom:1px solid var(--border);}
+#kkang_phone-root .tw-d-head{display:flex;align-items:center;gap:10px;}
+#kkang_phone-root .tw-d-av img{width:44px;height:44px;border-radius:50%;object-fit:cover;display:block;}
+#kkang_phone-root .tw-d-names{flex:1;min-width:0;}
+#kkang_phone-root .tw-d-name{font-weight:700;font-size:15px;color:var(--text);}
+#kkang_phone-root .tw-d-handle{font-size:13px;color:var(--text-muted);}
+#kkang_phone-root .tw-d-text{font-size:18px;line-height:1.5;color:var(--text);margin-top:12px;white-space:pre-wrap;word-break:break-word;}
+#kkang_phone-root .tw-d-time{font-size:12.5px;color:var(--text-muted);margin-top:12px;}
+#kkang_phone-root .tw-d-stats{display:flex;gap:18px;font-size:13px;color:var(--text-muted);padding:12px 0;margin-top:10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+#kkang_phone-root .tw-d-stats b{color:var(--text);font-weight:700;}
+#kkang_phone-root .tw-d-actions{display:flex;gap:36px;padding-top:12px;}
+#kkang_phone-root .tw-d-actions .tw-act{background:none;border:none;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--text-muted);font-size:15px;}
+#kkang_phone-root .tw-d-actions .tw-like.on{color:#f91880;}
+#kkang_phone-root .tw-d-actions .tw-rt.on{color:#00ba7c;}
+#kkang_phone-root .tw-d-replybar{font-size:13px;font-weight:700;color:var(--text-sec);padding:12px 16px 4px;}
+#kkang_phone-root .tw-d-replies{display:flex;flex-direction:column;gap:14px;padding:8px 16px 18px;}
+
+/* ===== INSTAGRAM 앱 ===== */
+#kkang_phone-root .app-icon-wrap.insta{background:linear-gradient(45deg,#f09433,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888);color:#fff;}
+#kkang_phone-root .insta-feed{display:flex;flex-direction:column;gap:14px;padding-bottom:10px;}
+#kkang_phone-root .ig-post{background:var(--card-bg);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+#kkang_phone-root .ig-head{display:flex;align-items:center;gap:8px;padding:9px 11px;}
+#kkang_phone-root .ig-author{flex:1;min-width:0;display:flex;align-items:center;gap:4px;}
+#kkang_phone-root .ig-name{font-weight:700;font-size:13px;color:var(--text);}
+#kkang_phone-root .ig-handle{font-size:11.5px;color:var(--text-muted);}
+#kkang_phone-root .ig-del{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 4px;}
+#kkang_phone-root .ig-img{width:100%;background:#000;}
+#kkang_phone-root .ig-img img{width:100%;display:block;object-fit:cover;max-height:420px;}
+#kkang_phone-root .ig-img-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg);color:var(--text-muted);min-height:160px;padding:18px;text-align:center;font-size:12px;}
+#kkang_phone-root .ig-img-empty i{font-size:30px;opacity:0.5;}
+#kkang_phone-root .ig-actions{display:flex;align-items:center;gap:10px;padding:8px 11px 2px;}
+#kkang_phone-root .ig-act{background:none;border:none;cursor:pointer;font-size:20px;color:var(--text);padding:0;line-height:1;}
+#kkang_phone-root .ig-act.ig-like.on{color:#e0245e;}
+#kkang_phone-root .ig-likes{font-size:13px;font-weight:600;color:var(--text);}
+#kkang_phone-root .ig-caption{padding:4px 11px 0;font-size:13px;color:var(--text);line-height:1.5;word-break:break-word;white-space:pre-wrap;}
+#kkang_phone-root .ig-comments{padding:6px 11px 0;display:flex;flex-direction:column;gap:5px;}
+#kkang_phone-root .ig-comment{display:flex;align-items:flex-start;gap:6px;font-size:12.5px;line-height:1.4;}
+#kkang_phone-root .ig-cname{font-weight:700;color:var(--text);flex-shrink:0;}
+#kkang_phone-root .ig-ctext{flex:1;min-width:0;color:var(--text);word-break:break-word;}
+#kkang_phone-root .ig-clike{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:11px;display:inline-flex;align-items:center;gap:3px;flex-shrink:0;padding:0;}
+#kkang_phone-root .ig-clike.on{color:#e0245e;}
+#kkang_phone-root .ig-time{padding:6px 11px 10px;font-size:11px;color:var(--text-muted);text-transform:uppercase;}
+
+/* 인스타 사진 리롤 버튼 */
+#kkang_phone-root .ig-act.ig-reroll{margin-left:auto;font-size:16px;color:var(--text-sec);}
+#kkang_phone-root .ig-act.ig-reroll:active{transform:rotate(90deg);}
+
+/* 인스타 '사진 생성' 버튼 (사진 없는 게시물용) */
+#kkang_phone-root .ig-genimg-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:14px;padding:3px 10px;cursor:pointer;color:var(--text-sec);font-size:11.5px;display:inline-flex;align-items:center;gap:5px;}
+#kkang_phone-root .ig-genimg-btn:active{transform:scale(0.95);}
+
+/* ===== 트위터/인스타 진짜 앱 느낌 보정 ===== */
+/* 트위터: 액션바를 실제 트위터처럼 넓게 펼침 */
+#kkang_phone-root .tw-actions{justify-content:space-between!important;gap:0!important;max-width:300px;}
+#kkang_phone-root .tw-card{transition:background .12s;}
+#kkang_phone-root .tw-card:active{background:rgba(0,0,0,0.03);}
+
+/* 인스타: 테두리 없는 풀폭 피드 + 정사각 이미지 (실제 앱 느낌) */
+#kkang_phone-root .insta-feed{gap:0!important;padding:0!important;}
+#kkang_phone-root .ig-post{border:none!important;border-radius:0!important;border-bottom:1px solid var(--border);}
+#kkang_phone-root .ig-img{border-radius:0!important;}
+#kkang_phone-root .ig-img img{width:100%;aspect-ratio:1/1;max-height:none!important;object-fit:cover;}
+#kkang_phone-root .ig-img-empty{aspect-ratio:1/1;min-height:0!important;}
+#kkang_phone-root .ig-actions{padding:10px 12px 4px!important;gap:14px!important;}
+#kkang_phone-root .ig-act{font-size:22px!important;}
+#kkang_phone-root .ig-likes{font-weight:600;}
+
+/* 인스타 리롤/프롬프트 버튼: 하트보다 작게, 오른쪽 정렬 */
+#kkang_phone-root .ig-act.ig-reroll,#kkang_phone-root .ig-act.ig-prompt{font-size:16px!important;color:var(--text-sec);}
+#kkang_phone-root .ig-act.ig-reroll{margin-left:auto;}
+#kkang_phone-root .ig-act.ig-prompt:active,#kkang_phone-root .ig-act.ig-reroll:active{transform:scale(0.9);}
+
+/* ===== 인스타 목업 스타일 (실제 앱 느낌) ===== */
+#kkang_phone-root .ig-head{padding:12px 14px!important;gap:12px!important;}
+#kkang_phone-root .ig-ring{padding:2px;border-radius:50%;background:linear-gradient(225deg,#D300C5,#FF4C27,#FFD000);display:inline-flex;flex-shrink:0;}
+#kkang_phone-root .ig-ring .ct-av{border:2px solid var(--card-bg)!important;}
+#kkang_phone-root .ig-img{background:#000;}
+#kkang_phone-root .ig-img img{width:100%!important;aspect-ratio:1/1;object-fit:contain!important;max-height:none!important;background:#000;display:block;}
+#kkang_phone-root .ig-actions{padding:10px 14px 2px!important;align-items:center;gap:16px!important;}
+#kkang_phone-root .ig-act-spacer{flex:1;}
+#kkang_phone-root .ig-likes{padding:2px 14px!important;font-weight:700!important;font-size:13px;color:var(--text);}
+#kkang_phone-root .ig-caption{padding:3px 14px 0!important;}
+#kkang_phone-root .ig-caption.ig-clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+#kkang_phone-root .ig-more{padding:2px 14px 0;font-size:13px;color:var(--text-muted);cursor:pointer;width:fit-content;}
+#kkang_phone-root .ig-comments{padding:6px 14px 0!important;}
+#kkang_phone-root .ig-time{padding:8px 14px 12px!important;font-size:10.5px!important;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.3px;}
+
+/* ===== 모바일: 폰을 전체화면으로 (좁은 화면에서 확실히 보이게) ===== */
+@media (max-width: 600px){
+  #kkang_phone-root{
+    position:fixed!important;left:0!important;right:0!important;top:0!important;bottom:0!important;
+    width:100vw!important;max-width:100vw!important;
+    height:100vh!important;height:100dvh!important;max-height:100vh!important;max-height:100dvh!important;
+    border-radius:0!important;
+  }
+  #kkang_phone-root .phone-frame{
+    width:100%!important;max-width:100%!important;
+    height:calc(100vh - 34px)!important;height:calc(100dvh - 34px)!important;
+    border-radius:0!important;border:none!important;
+  }
+}
+
+/* ===== 팬밀리(온리팬스) 앱 ===== */
+#kkang_phone-root .app-icon-wrap.onlyfans{background:#00aff0;color:#fff;}
+#kkang_phone-root .of-profile{padding:0 0 12px;border-bottom:8px solid var(--bg);}
+#kkang_phone-root .of-banner{height:90px;background:linear-gradient(120deg,#00aff0,#0085c7);}
+#kkang_phone-root .of-prof-row{display:flex;align-items:flex-end;gap:12px;padding:0 14px;margin-top:-30px;}
+#kkang_phone-root .of-prof-av .ct-av{width:64px!important;height:64px!important;min-width:64px!important;max-width:64px!important;border:3px solid var(--card-bg)!important;font-size:22px!important;}
+#kkang_phone-root .of-prof-info{padding-bottom:4px;min-width:0;}
+#kkang_phone-root .of-prof-name{font-weight:800;font-size:16px;color:var(--text);display:flex;align-items:center;gap:5px;}
+#kkang_phone-root .of-prof-handle{font-size:12px;color:var(--text-muted);}
+#kkang_phone-root .of-bio{padding:10px 14px 0;font-size:13px;color:var(--text);line-height:1.5;}
+#kkang_phone-root .of-stats{display:flex;gap:16px;padding:10px 14px 0;font-size:12px;color:var(--text-sec);}
+#kkang_phone-root .of-stats b{color:var(--text);}
+#kkang_phone-root .of-actions{display:flex;gap:8px;padding:12px 14px 0;}
+#kkang_phone-root .of-btn{flex:0 0 auto;border:none;border-radius:22px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+#kkang_phone-root .of-actions{display:flex;gap:8px;padding:0 14px;}
+#kkang_phone-root .of-actions .of-btn{flex:1;padding:9px 0;}
+#kkang_phone-root .of-btn.sub{background:#00aff0;color:#fff;}
+#kkang_phone-root .of-btn.subbed{background:var(--bg);color:var(--text-sec);border:1px solid var(--border);}
+#kkang_phone-root .of-btn.tip{background:var(--bg);color:#00aff0;border:1px solid #00aff0;}
+#kkang_phone-root .of-feed{display:flex;flex-direction:column;}
+#kkang_phone-root .of-post{border-bottom:1px solid var(--border);padding-bottom:6px;}
+#kkang_phone-root .of-post-head{display:flex;align-items:center;gap:10px;padding:10px 14px;}
+#kkang_phone-root .of-pa .ct-av{width:30px!important;height:30px!important;min-width:30px!important;max-width:30px!important;}
+#kkang_phone-root .of-pa-name{font-weight:700;font-size:13px;color:var(--text);}
+#kkang_phone-root .of-pa-time{font-size:11px;color:var(--text-muted);}
+#kkang_phone-root .of-img{width:100%;background:#000;position:relative;}
+#kkang_phone-root .of-img img{width:100%;aspect-ratio:1/1;object-fit:contain;background:#000;display:block;}
+#kkang_phone-root .of-img.locked img{filter:blur(22px) brightness(0.8);}
+#kkang_phone-root .of-img-empty{aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg);color:var(--text-muted);font-size:12px;}
+#kkang_phone-root .of-lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#fff;background:rgba(0,0,0,0.35);}
+#kkang_phone-root .of-lock>i{font-size:30px;}
+#kkang_phone-root .of-unlock{margin-top:4px;background:#00aff0;color:#fff;border:none;border-radius:20px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+#kkang_phone-root .of-post-actions{display:flex;align-items:center;gap:14px;padding:10px 14px 2px;}
+#kkang_phone-root .of-like{font-size:22px!important;}
+#kkang_phone-root .of-like.on{color:#e0245e;}
+#kkang_phone-root .of-caption{padding:3px 14px 4px;font-size:13px;color:var(--text);line-height:1.5;word-break:break-word;white-space:pre-wrap;}
+#kkang_phone-root .of-chips{display:flex;flex-wrap:wrap;gap:6px;}
+#kkang_phone-root .of-chip{background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:6px 12px;font-size:12px;color:var(--text);cursor:pointer;font-family:inherit;}
+
+/* OnlyFans 아이콘 + 잠금 태그 */
+#kkang_phone-root .app-icon-wrap.onlyfans{background:#00aff0;color:#fff;}
+#kkang_phone-root .of-logo{font-weight:800;font-style:italic;font-size:21px;color:#fff;letter-spacing:-1px;}
+#kkang_phone-root .of-lock-tag{padding:2px 14px;font-size:12px;color:#00aff0;font-weight:700;}
+
+/* ===== 라이브 앱 (트위치/유튜브/인스타) ===== */
+#kkang_phone-root .app-icon-wrap.live{background:linear-gradient(135deg,#9146FF,#FF0000);color:#fff;}
+#kkang_phone-root .live-plats{display:flex;flex-direction:column;gap:8px;}
+#kkang_phone-root .live-plat-btn{display:flex;align-items:center;gap:8px;padding:11px 14px;border:2px solid var(--border);border-radius:12px;background:var(--card-bg);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+#kkang_phone-root .live-plat-btn.on{border-color:var(--pc);color:var(--pc);background:color-mix(in srgb, var(--pc) 8%, transparent);}
+#kkang_phone-root .live-plat-btn i{color:var(--pc);font-size:18px;}
+#kkang_phone-root .live-setup-label{font-size:13px;font-weight:700;color:var(--text);margin:16px 0 8px;}
+#kkang_phone-root .live-setup-label:first-child{margin-top:0;}
+#kkang_phone-root .live-concepts{display:flex;flex-wrap:wrap;gap:8px;}
+#kkang_phone-root .live-concept-btn{padding:8px 14px;border:2px solid var(--border);border-radius:999px;background:var(--card-bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+#kkang_phone-root .live-concept-btn.on{border-color:#9146FF;color:#9146FF;background:color-mix(in srgb,#9146FF 8%,transparent);}
+
+/* ===== 라이브 방송 목록 (세로 리스트) ===== */
+#kkang_phone-root .livecard-list{display:flex;flex-direction:column;}
+#kkang_phone-root .livecard{cursor:pointer;border-bottom:8px solid var(--bg);}
+#kkang_phone-root .livecard:active{opacity:0.85;}
+#kkang_phone-root .livecard-thumb{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden;}
+#kkang_phone-root .livecard-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+#kkang_phone-root .livecard-noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#2a2a30,#101013);color:#555;font-size:34px;}
+#kkang_phone-root .livecard-live{position:absolute;top:8px;left:8px;background:#e0245e;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.4px;animation:liveBlink 1.1s ease-in-out infinite;}
+/* 방송 종료 상태 */
+#kkang_phone-root .livecard-live.ended{background:#555;animation:none;}
+#kkang_phone-root .livecard-thumb.ended img{filter:grayscale(0.7) brightness(0.55);}
+#kkang_phone-root .livecard-thumb.ended .livecard-noimg{filter:brightness(0.7);}
+/* z-index 2: 인스타 레이아웃에선 채팅(z-index 3)·상단바보다 아래에 깔려 채팅이 가려지지 않게(종료 후에도 지난 채팅 열람 가능) */
+#kkang_phone-root .live-ended-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(0,0,0,0.55);color:#fff;z-index:2;backdrop-filter:blur(2px);pointer-events:none;}
+#kkang_phone-root .live-ended-overlay i{font-size:42px;opacity:0.85;}
+#kkang_phone-root .live-ended-overlay span{font-size:14px;font-weight:700;letter-spacing:1px;}
+/* 종료 시 LIVE 배지 깜빡임 제거 + 회색 */
+#kkang_phone-root .live-badge.ended,#kkang_phone-root .iglive-live.ended{background:#555!important;animation:none!important;}
+#kkang_phone-root .livecard-views{position:absolute;top:8px;left:62px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;}
+#kkang_phone-root .livecard-plat{position:absolute;bottom:8px;right:8px;font-size:18px;text-shadow:0 1px 3px rgba(0,0,0,0.6);}
+#kkang_phone-root .livecard-meta{display:flex;align-items:center;gap:10px;padding:10px 12px;}
+#kkang_phone-root .livecard-av{flex-shrink:0;}
+#kkang_phone-root .livecard-info{flex:1;min-width:0;}
+#kkang_phone-root .livecard-title{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#kkang_phone-root .livecard-streamer{font-size:12px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#kkang_phone-root .livecard-del{flex-shrink:0;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:15px;padding:4px 6px;opacity:0.6;}
+#kkang_phone-root .livecard-del:active{opacity:1;color:var(--red);}
+
+/* ===== 인스타 라이브: 풀스크린 세로 영상 + 오버레이 ===== */
+#kkang_phone-root .live-body.iglive{padding:0;}
+#kkang_phone-root .iglive-stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden;}
+#kkang_phone-root .iglive-stage>img{width:100%;height:100%;object-fit:contain;display:block;}
+#kkang_phone-root .iglive-stage>.live-screen-empty{width:100%;height:100%;}
+#kkang_phone-root .iglive-topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:12px;gap:8px;background:linear-gradient(rgba(0,0,0,0.5),transparent);z-index:3;}
+#kkang_phone-root .iglive-host{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.35);border-radius:20px;padding:3px 12px 3px 3px;backdrop-filter:blur(4px);min-width:0;}
+#kkang_phone-root .iglive-hostmeta{display:flex;flex-direction:column;min-width:0;}
+#kkang_phone-root .iglive-hostmeta b{font-size:13px;color:#fff;}
+#kkang_phone-root .iglive-hostmeta span{font-size:10px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
+#kkang_phone-root .iglive-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+#kkang_phone-root .iglive-views{background:rgba(0,0,0,0.4);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;backdrop-filter:blur(4px);}
+/* 시청자 수 눈(👁) 글리프 흰색 강제 — ST 테마가 i{color}를 덮어써서 회색으로 보이던 문제(앱아이콘·하트와 동일 원인) */
+#kkang_phone-root .iglive-views i, #kkang_phone-root .live-viewers i, #kkang_phone-root .livecard-views i{ color:#fff!important; }
+#kkang_phone-root .iglive-live{background:#e1306c;color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:6px;letter-spacing:0.5px;animation:liveBlink 1.1s ease-in-out infinite;}
+#kkang_phone-root .iglive .live-cam-reroll{top:54px;bottom:auto;}
+#kkang_phone-root .iglive-bottom{position:absolute;left:0;right:0;bottom:0;padding:14px 12px 10px;z-index:3;background:linear-gradient(transparent,rgba(0,0,0,0.45) 30%,rgba(0,0,0,0.82));}
+/* 채팅을 아래쪽에 붙여 적을 때 첫 댓글이 fade존에 들어가 사라지던 문제 → justify-content:flex-end +
+   맨 위도 완전 투명이 아니라 35%까지만 흐리게(보이면서 흐려짐). */
+/* justify-content:flex-end 제거 — 그게 flexbox 오버플로우 시 위로 스크롤이 막히는 버그 원인이었음.
+   첫 댓글은 마스크를 완전투명이 아닌 35%로 두어 '보이면서 흐려짐' 처리(아래 mask). */
+#kkang_phone-root .iglive-chat{max-height:210px;overflow-y:auto;display:flex;flex-direction:column;align-items:flex-start;gap:7px;margin-bottom:10px;-webkit-mask-image:linear-gradient(to top,#000 90%,rgba(0,0,0,0.45));mask-image:linear-gradient(to top,#000 90%,rgba(0,0,0,0.45));}
+#kkang_phone-root .iglive-chat::-webkit-scrollbar{width:0;}
+/* 영상 위 댓글이 밝은 화면에선 거의 안 보여서(유저 제보) 각 댓글에 반투명 검정 칩을 깔아 가독성 확보 */
+#kkang_phone-root .iglive-chat .live-chat-line{font-size:13px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.9);background:rgba(0,0,0,0.45);border-radius:14px;padding:4px 11px;align-self:flex-start;max-width:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+#kkang_phone-root .iglive-chat .live-chat-name{color:#fff;font-weight:700;}
+#kkang_phone-root .iglive-chat .live-chat-text{color:#fff;}
+#kkang_phone-root .iglive-chat .live-chat-empty,#kkang_phone-root .iglive-chat .live-chat-loading{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.9);}
+/* 인스타 라이브에서 내가 보낸 채팅 확실히 구분(영상 위라 흐릿해서 잘 안 보였음) */
+#kkang_phone-root .iglive-chat .live-chat-line.me{background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.55);border-radius:9px;padding:3px 8px;}
+#kkang_phone-root .iglive-chat .live-chat-line.me .live-chat-name{color:#ffe16b;}
+#kkang_phone-root .iglive-bar{display:flex;align-items:center;gap:8px;}
+#kkang_phone-root .iglive-input{flex:1;height:40px;border-radius:20px;background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.6);padding:0 16px;color:#fff;font-size:13px;outline:none;font-family:inherit;min-width:0;}
+#kkang_phone-root .iglive-input::placeholder{color:rgba(255,255,255,0.8);}
+#kkang_phone-root .iglive-icon{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.6));padding:0 2px;}
+
+/* ===== 유튜브 라이브: 상단 영상 + 정보 + 실시간 채팅(아바타) ===== */
+#kkang_phone-root .ytlive-info{padding:10px 14px;border-bottom:1px solid var(--border);}
+#kkang_phone-root .ytlive-title{font-size:14px;font-weight:700;color:var(--text);line-height:1.35;margin-bottom:8px;}
+#kkang_phone-root .ytlive-chan{display:flex;align-items:center;gap:10px;}
+#kkang_phone-root .ytlive-chan-name{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#kkang_phone-root .ytlive-sub{background:#ff0000;color:#fff;border:none;border-radius:18px;padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;}
+#kkang_phone-root .ytlive-thanks{background:none;border:1px solid var(--border);border-radius:50%;width:34px;height:34px;font-size:14px;cursor:pointer;flex-shrink:0;color:var(--text);}
+#kkang_phone-root .ytlive-chathead{padding:9px 14px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+#kkang_phone-root .ytlive-chathead i{color:#ff0000;}
+#kkang_phone-root .ytlive-chat{gap:10px!important;}
+#kkang_phone-root .ytlive-msg{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.4;}
+#kkang_phone-root .ytlive-msg-av{flex-shrink:0;}
+#kkang_phone-root .ytlive-msg-body{min-width:0;}
+#kkang_phone-root .ytlive-msg-name{font-weight:600;color:var(--text-muted);margin-right:5px;}
+#kkang_phone-root .ytlive-msg-text{color:var(--text);word-break:break-word;}
+#kkang_phone-root .ytlive-msg.streamer .ytlive-msg-name{color:#ff0000;}
+#kkang_phone-root .ytlive-msg.donation{background:color-mix(in srgb,#1e88e5 16%,transparent);border-radius:6px;padding:4px 6px;}
+#kkang_phone-root .ytlive-msg.me .ytlive-msg-name{color:#1e88e5;font-weight:800;}
+#kkang_phone-root .live-send-btn.yt{background:#ff0000;}
+
+/* ===== 트위치 라이브: 스트리머 정보(팔로우/카테고리) ===== */
+#kkang_phone-root .twlive-info{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);}
+#kkang_phone-root .twlive-name{font-size:14px;font-weight:700;color:var(--text);}
+#kkang_phone-root .twlive-titletxt{font-size:12px;color:var(--text-sec);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+#kkang_phone-root .twlive-cat{font-size:11px;color:#9146FF;font-weight:600;margin-top:2px;}
+#kkang_phone-root .twlive-follow{background:#9146FF;color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;display:inline-flex;align-items:center;gap:4px;}
+
+/* ===== OnlyFans 계정 목록 ===== */
+#kkang_phone-root .of-acct-list{display:flex;flex-direction:column;}
+#kkang_phone-root .of-acct{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+#kkang_phone-root .of-acct:active{background:var(--bg);}
+#kkang_phone-root .of-acct-av{flex-shrink:0;}
+#kkang_phone-root .of-acct-info{flex:1;min-width:0;}
+#kkang_phone-root .of-acct-name{font-size:14px;font-weight:700;color:var(--text);}
+#kkang_phone-root .of-acct-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#kkang_phone-root .of-acct-del{flex-shrink:0;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:15px;padding:4px 6px;opacity:0.6;}
+#kkang_phone-root .of-acct-del:active{opacity:1;color:var(--red);}
+
+/* ===== OnlyFans 댓글 가독성 ===== */
+#kkang_phone-root .of-cmthead{padding:8px 14px 4px;font-size:12px;font-weight:700;color:var(--text-sec);}
+#kkang_phone-root .of-comments{display:flex;flex-direction:column;gap:9px;padding:2px 14px 10px;}
+#kkang_phone-root .ofc{display:flex;gap:8px;align-items:flex-start;}
+#kkang_phone-root .ofc-av{flex-shrink:0;}
+#kkang_phone-root .ofc-body{flex:1;min-width:0;background:var(--bg);border-radius:12px;padding:7px 11px;}
+#kkang_phone-root .ofc-name{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;}
+#kkang_phone-root .ofc-text{font-size:12.5px;color:var(--text);line-height:1.45;word-break:break-word;}
+#kkang_phone-root .of-post{border-bottom:8px solid var(--bg)!important;padding-bottom:4px;}
+#kkang_phone-root .live-body{display:flex;flex-direction:column;padding:0;--lc:#9146FF;}
+#kkang_phone-root .live-body.live-twitch{--lc:#9146FF;}
+#kkang_phone-root .live-body.live-youtube{--lc:#FF0000;}
+#kkang_phone-root .live-body.live-instagram{--lc:#E1306C;}
+#kkang_phone-root .live-screen{position:relative;width:100%;aspect-ratio:16/9;background:#000;overflow:hidden;flex-shrink:0;}
+#kkang_phone-root .live-screen img{width:100%;height:100%;object-fit:cover;display:block;}
+#kkang_phone-root .live-screen-empty{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#777;font-size:13px;}
+#kkang_phone-root .live-screen-empty i{font-size:34px;color:var(--lc);}
+#kkang_phone-root .live-badge{position:absolute;top:8px;left:8px;background:#e0245e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:4px;letter-spacing:0.5px;display:flex;align-items:center;gap:3px;}
+#kkang_phone-root .live-viewers{position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;}
+#kkang_phone-root .live-cam-reroll{position:absolute;bottom:8px;right:8px;width:30px;height:30px;border-radius:50%;border:none;background:rgba(0,0,0,0.55);color:#fff;cursor:pointer;font-size:13px;}
+#kkang_phone-root .live-cam-next{position:absolute;bottom:8px;right:46px;height:30px;padding:0 12px;border-radius:15px;border:none;background:rgba(139,92,246,0.85);color:#fff;cursor:pointer;font-size:13px;}
+#kkang_phone-root .iglive .live-cam-next{top:54px;bottom:auto;right:46px;}
+#kkang_phone-root .live-info{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);}
+#kkang_phone-root .live-title{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#kkang_phone-root .live-streamer-name{font-size:12px;color:var(--lc);font-weight:600;}
+#kkang_phone-root .live-chat{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:5px;background:var(--bg);min-height:120px;}
+#kkang_phone-root .live-chat-line{font-size:12.5px;line-height:1.4;word-break:break-word;}
+#kkang_phone-root .live-chat-name{font-weight:700;color:var(--lc);margin-right:5px;}
+#kkang_phone-root .live-chat-line.streamer .live-chat-name{color:#fff;background:var(--lc);padding:1px 6px;border-radius:4px;}
+#kkang_phone-root .live-chat-line.streamer .live-chat-text{font-weight:600;}
+#kkang_phone-root .live-chat-text{color:var(--text);}
+#kkang_phone-root .live-chat-line.donation{background:color-mix(in srgb,var(--lc) 14%,transparent);border-radius:6px;padding:4px 6px;}
+#kkang_phone-root .live-chat-line.donation .live-chat-name{color:var(--lc);}
+#kkang_phone-root .live-chat-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:30px 0;}
+#kkang_phone-root .live-chat-empty-btn{display:block;width:calc(100% - 24px);margin:20px 12px;padding:10px 0;border:1.5px dashed var(--lc);border-radius:12px;background:color-mix(in srgb,var(--lc) 8%,transparent);color:var(--lc);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;text-align:center;}
+#kkang_phone-root .live-chat-empty-btn:active{opacity:0.7;}
+#kkang_phone-root .iglive-chat .live-chat-empty-btn{border-color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.15);color:#fff;}
+#kkang_phone-root .live-bar{padding:10px 12px;border-top:1px solid var(--border);}
+#kkang_phone-root .live-donate-btn{width:100%;border:none;border-radius:22px;padding:11px 0;background:var(--lc);color:#fff;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+
+/* OnlyFans SVG 로고 */
+#kkang_phone-root .of-logo-svg{display:block;}
+/* LIVE 뱃지 깜빡임 */
+@keyframes liveBlink{0%,55%{opacity:1}70%,100%{opacity:0.25}}
+#kkang_phone-root .live-badge{animation:liveBlink 1.1s ease-in-out infinite;}
+/* 라이브 하단바: 채팅입력 + 전송 + 후원아이콘 */
+#kkang_phone-root .live-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--border);}
+#kkang_phone-root .live-chat-input{flex:1;height:38px;border:1px solid var(--border);border-radius:19px;padding:0 14px;font-size:13px;background:var(--card-bg);color:var(--text);outline:none;font-family:inherit;min-width:0;}
+#kkang_phone-root .live-send-btn{width:38px;height:38px;border-radius:50%;border:none;background:var(--lc);color:#fff;cursor:pointer;font-size:14px;flex-shrink:0;}
+#kkang_phone-root .live-donate-icon{width:38px;height:38px;border-radius:50%;border:1px solid var(--lc);background:none;color:var(--lc);cursor:pointer;font-size:15px;flex-shrink:0;}
+/* 라이브 내 메시지 강조 */
+#kkang_phone-root .live-chat-line.me{background:color-mix(in srgb,var(--lc) 10%,transparent);border-radius:6px;padding:3px 6px;}
+#kkang_phone-root .live-chat-line.me .live-chat-name{color:var(--lc);font-weight:800;}
+/* 내가 '호스트'로서 친 채팅: streamer 펄(보라 배경) + me(보라 글자)가 겹쳐 보라-on-보라로 닉네임이 안 보이던 것 → 흰 글자로 */
+#kkang_phone-root .live-chat-line.streamer.me .live-chat-name{color:#fff;}
+/* 영상 위 컨트롤(리롤🔄·다음장면🎬·전송·하트·선물)이 밝은 화면에서 회색처럼 흐려 보인다는 제보
+   → 글리프 순백 강제 + 어두운 칩으로 대비 확보. 호스트 인증 뱃지도 또렷한 흰색으로. */
+#kkang_phone-root .live-cam-reroll,#kkang_phone-root .live-cam-reroll i,
+#kkang_phone-root .live-cam-next,#kkang_phone-root .live-cam-next i,
+#kkang_phone-root .iglive-icon,#kkang_phone-root .iglive-icon i{color:#fff!important;}
+#kkang_phone-root .live-cam-reroll{background:rgba(0,0,0,0.62);}
+#kkang_phone-root .live-chat-line.streamer .live-chat-name i,
+#kkang_phone-root .iglive-chat .live-chat-line.streamer .live-chat-name i{color:#fff!important;}
+/* 후원(팁) 시트 — OnlyFans/라이브 공용 */
+#kkang_phone-root .tip-sheet{--tip-accent:#00aff0;}
+#kkang_phone-root .tip-live{--tip-accent:#9147ff;}
+#kkang_phone-root .tip-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+#kkang_phone-root .tip-top-tt{font-size:17px;font-weight:800;letter-spacing:.3px;color:var(--text);}
+#kkang_phone-root .tip-x{background:none;border:none;color:var(--text-sec);font-size:24px;line-height:1;cursor:pointer;padding:0 2px;font-family:inherit;}
+#kkang_phone-root .tip-x:hover{color:var(--text);}
+#kkang_phone-root .tip-who{display:flex;align-items:center;gap:11px;margin-bottom:18px;}
+#kkang_phone-root .tip-who-av{width:46px;height:46px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 0 0 2px var(--tip-accent);}
+/* .ct-av는 전역적으로 36px!important라(line 1138) 인라인 46px를 덮어써서 프사가 칸보다 작게 박혔음 → tip 칸에선 컨테이너(46px)를 꽉 채우게 !important로 되덮음 */
+#kkang_phone-root .tip-who-av .ct-av,#kkang_phone-root .tip-who-av img{width:100%!important;height:100%!important;min-width:100%!important;max-width:100%!important;border-radius:50%!important;object-fit:cover!important;font-size:18px!important;}
+#kkang_phone-root .tip-who-name{font-size:15px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;}
+#kkang_phone-root .tip-who-name i{color:var(--tip-accent);font-size:12px;}
+#kkang_phone-root .tip-who-handle{font-size:12.5px;color:var(--text-sec);margin-top:2px;}
+#kkang_phone-root .tip-lbl{font-size:12px;font-weight:700;color:var(--text-sec);letter-spacing:.5px;margin-bottom:10px;}
+#kkang_phone-root .tip-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+#kkang_phone-root .tip-amt{padding:13px 0;border:1.5px solid var(--border);border-radius:11px;background:var(--card-bg);color:var(--text);font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s;}
+#kkang_phone-root .tip-amt:hover{border-color:var(--tip-accent);}
+#kkang_phone-root .tip-amt.active{background:color-mix(in srgb,var(--tip-accent) 14%,transparent);border-color:var(--tip-accent);color:var(--tip-accent);}
+
+/* 항목별 초기화 모달 */
+#kkang_phone-root .reset-list{display:flex;flex-direction:column;gap:1px;background:var(--bg);border-radius:10px;padding:4px;}
+#kkang_phone-root .reset-row{display:flex;align-items:center;gap:11px;padding:10px 10px;border-radius:8px;cursor:pointer;font-size:14px;color:var(--text);transition:background .12s;}
+#kkang_phone-root .reset-row:hover{background:var(--card);}
+#kkang_phone-root .reset-row:active{background:var(--card);}
+#kkang_phone-root .reset-cb,#kkang_phone-root .reset-all-cb{width:17px;height:17px;accent-color:var(--red);cursor:pointer;flex-shrink:0;}
+#kkang_phone-root .reset-ico{width:18px;text-align:center;color:var(--text-sec);font-size:13px;flex-shrink:0;}
+/* 슬라이더(범위 입력) — 네이티브 기본 모양 + 테마색만(accent-color). v1.19.44의 커스텀 트랙/thumb가
+   모바일에서 이상하게 보여 유저 요청으로 원복(v1.19.52). 네이티브라 thumb는 항상 보이고 OS/테마를 따른다. */
+#kkang_phone-root input[type="range"]{ accent-color:var(--primary); cursor:pointer; }
+/* 숫자 입력 스피너 제거(모바일 정렬 깨짐 방지) */
+#kkang_phone-root input[type="number"]{ -moz-appearance:textfield; }
+#kkang_phone-root input[type="number"]::-webkit-outer-spin-button,#kkang_phone-root input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+#kkang_phone-root .reset-master{font-weight:600;margin-bottom:8px;background:var(--card);border:1px solid var(--border);}
+#kkang_phone-root .reset-master:hover{background:var(--card);}
+
+/* 큰 로딩 오버레이 텍스트 강조 */
+#kkang_phone-root #loading-overlay .loading-text{font-size:14px!important;font-weight:700;color:var(--text);}
+/* 라이브 채팅 생성 인디케이터 */
+#kkang_phone-root .live-chat-loading{display:flex;width:100%;align-items:center;justify-content:center;gap:4px;padding:14px 4px;color:var(--lc);font-size:12px;}
+/* 라이브 방송화면 수동 생성 버튼 */
+#kkang_phone-root .live-gen-btn{margin-top:12px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:18px;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit;}
+#kkang_phone-root .live-gen-btn:active{transform:scale(0.95);}
+#kkang_phone-root .live-chat-loading em{font-style:normal;margin-left:4px;color:var(--text-sec);}
+#kkang_phone-root .live-chat-loading span{width:6px;height:6px;border-radius:50%;background:var(--lc);animation:liveDot 1s infinite ease-in-out;}
+#kkang_phone-root .live-chat-loading span:nth-child(2){animation-delay:0.15s;}
+#kkang_phone-root .live-chat-loading span:nth-child(3){animation-delay:0.3s;}
+@keyframes liveDot{0%,60%,100%{opacity:0.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+/* 후원 직접입력 + 메시지 + 전송 */
+/* 통화기호와 입력 숫자가 겹치던 문제 → 절대배치 대신 flex로(테마가 input padding 덮어써도 안 겹침) */
+#kkang_phone-root .tip-custom{display:flex;align-items:center;gap:6px;margin-bottom:14px;height:46px;border:1.5px solid var(--border);border-radius:11px;background:var(--card-bg);padding:0 14px;}
+#kkang_phone-root .tip-custom span{position:static;flex:0 0 auto;color:var(--text-sec);font-size:15px;font-weight:700;pointer-events:none;}
+#kkang_phone-root .tip-custom input{flex:1;min-width:0;width:auto;box-sizing:border-box;height:100%;border:none!important;border-radius:0;padding:0!important;font-size:16px;font-weight:700;background:transparent!important;color:var(--text);outline:none;font-family:inherit;}
+#kkang_phone-root .tip-custom input:focus{border-color:var(--tip-accent,#00aff0);}
+#kkang_phone-root .tip-msg{width:100%;box-sizing:border-box;height:62px;border:1.5px solid var(--border);border-radius:11px;padding:11px 14px;font-size:13px;line-height:1.4;background:var(--card-bg);color:var(--text);outline:none;resize:none;font-family:inherit;margin-bottom:16px;transition:border-color .12s;}
+#kkang_phone-root .tip-msg:focus{border-color:var(--tip-accent,#00aff0);}
+#kkang_phone-root .tip-msg::placeholder{color:var(--text-sec);opacity:.7;}
+/* 후원 시 반응 생성(AI 호출) 여부 체크박스 */
+#kkang_phone-root .tip-react-row{display:flex;align-items:center;gap:8px;margin:-4px 0 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);}
+#kkang_phone-root .tip-react-row input{width:17px;height:17px;flex-shrink:0;accent-color:var(--tip-accent,#00aff0);cursor:pointer;margin:0;}
+#kkang_phone-root .tip-react-row small{color:var(--text-sec);font-weight:500;font-size:11.5px;}
+#kkang_phone-root .tip-send{width:100%;border:none;border-radius:22px;background:var(--tip-accent,#00aff0);color:#fff;font-size:15px;font-weight:800;padding:15px;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px color-mix(in srgb,var(--tip-accent,#00aff0) 35%,transparent);transition:filter .12s,transform .1s;}
+#kkang_phone-root .tip-send:hover{filter:brightness(1.07);}
+#kkang_phone-root .tip-send:active{transform:scale(.98);}
+/* 게시물별 후원 버튼 */
+#kkang_phone-root .of-sendtip{display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:#00aff0;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;padding:4px 6px;}
+#kkang_phone-root .of-sendtip:hover{opacity:.8;}
+/* 잠금 해제 확인 모달 */
+#kkang_phone-root .unlock-confirm{text-align:center;}
+#kkang_phone-root .uc-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;background:rgba(0,175,240,.14);color:#00aff0;font-size:22px;}
+#kkang_phone-root .uc-price{font-size:26px;font-weight:800;color:var(--text);margin:6px 0 4px;}
+#kkang_phone-root .uc-sub{font-size:13px;color:var(--text-sec);margin-bottom:6px;line-height:1.5;}
+#kkang_phone-root .unlock-confirm .uc-go{background:#00aff0;border-color:#00aff0;}
+
+/* 인스타 구분선 더 뚜렷하게 */
+#kkang_phone-root .ig-post{border-bottom:8px solid var(--bg)!important;}
+#kkang_phone-root .ig-post::after{content:"";display:block;height:1px;background:var(--border);margin-top:6px;}
+
+/* ===== 인스타 피드/격자 뷰 토글 + 프로필식 격자(그리드) ===== */
+#kkang_phone-root .ig-viewtabs{
+  display:flex; position:sticky; top:0; z-index:4; background:var(--bg);
+  border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+}
+#kkang_phone-root .ig-vtab{
+  flex:1; background:none; border:none; cursor:pointer; padding:9px 0;
+  color:var(--text-muted); font-size:17px; border-bottom:2px solid transparent;
+}
+#kkang_phone-root .ig-vtab.on{ color:var(--text); border-bottom-color:var(--text); }
+#kkang_phone-root .insta-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:2px; padding:0; }
+#kkang_phone-root .ig-cell{
+  position:relative; aspect-ratio:1/1; background:#000; border:none; padding:0;
+  cursor:pointer; overflow:hidden;
+}
+#kkang_phone-root .ig-cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+#kkang_phone-root .ig-cell-pending{
+  width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:var(--bg);
+}
+#kkang_phone-root .ig-cell-text{
+  width:100%; height:100%; display:flex; flex-direction:column; gap:4px;
+  align-items:flex-start; justify-content:center; padding:8px; box-sizing:border-box;
+  background:linear-gradient(135deg,#3a3a3a,#1a1a1a); color:#eaeaea;
+  font-size:10px; line-height:1.35; text-align:left; overflow:hidden;
+}
+#kkang_phone-root .ig-cell-text b{ font-size:10.5px; color:#fff; }
+#kkang_phone-root .ig-cell-text span{ opacity:0.85; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* 인스타 내 프로필(통합 계정) */
+#kkang_phone-root .ig-profile{ padding:16px 16px 10px; border-bottom:1px solid var(--border); }
+#kkang_phone-root .ig-prof-top{ display:flex; align-items:center; gap:18px; }
+#kkang_phone-root .kp-av-round{ border-radius:50%!important; object-fit:cover; aspect-ratio:1/1; }
+#kkang_phone-root .ig-prof-av{ flex-shrink:0; }
+#kkang_phone-root .ig-prof-av img, #kkang_phone-root .ig-prof-av .avatar{ border:2px solid var(--border); }
+#kkang_phone-root .ig-prof-stats{ flex:1; display:flex; justify-content:space-around; text-align:center; }
+#kkang_phone-root .ig-prof-stats > div{ display:flex; flex-direction:column; gap:1px; }
+#kkang_phone-root .ig-prof-stats b{ font-size:16px; color:var(--text); }
+#kkang_phone-root .ig-prof-stats span{ font-size:11px; color:var(--text-sec); }
+#kkang_phone-root .ig-prof-name{ font-size:14px; font-weight:700; color:var(--text); margin-top:10px; }
+#kkang_phone-root .ig-prof-handle{ font-size:12px; color:var(--text-sec); margin-top:1px; }
+#kkang_phone-root .ig-prof-bio{ font-size:12.5px; color:var(--text); margin-top:6px; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+#kkang_phone-root .ig-prof-actions{ display:flex; gap:8px; margin-top:10px; }
+#kkang_phone-root .ig-prof-btn{
+  flex:1; background:var(--bubble-npc); color:var(--text); border:1px solid var(--border);
+  border-radius:8px; padding:7px 0; font-size:12px; font-weight:600; cursor:pointer;
+}
+#kkang_phone-root .ig-prof-btn i{ font-size:11px; margin-right:3px; opacity:.8; }
+#kkang_phone-root .ig-prof-note{ font-size:10.5px; color:var(--text-muted); margin-top:8px; line-height:1.45; }
+
+/* OnlyFans 지출 내역(원장) 모달 */
+#kkang_phone-root .ofl-total{ font-size:13px; color:var(--text-sec); margin:2px 0 10px; }
+#kkang_phone-root .ofl-total b{ color:var(--text); font-size:15px; }
+#kkang_phone-root .ofl-list{ max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:2px; }
+#kkang_phone-root .ofl-row{
+  display:flex; align-items:center; gap:10px; padding:8px 4px;
+  border-bottom:1px solid var(--border); font-size:12.5px;
+}
+#kkang_phone-root .ofl-ic{ color:#00aff0; font-size:13px; width:18px; text-align:center; flex-shrink:0; }
+#kkang_phone-root .ofl-body{ flex:1; min-width:0; }
+#kkang_phone-root .ofl-line1{ color:var(--text); }
+#kkang_phone-root .ofl-line1 b{ font-weight:700; }
+#kkang_phone-root .ofl-line2{ font-size:10.5px; color:var(--text-muted); margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#kkang_phone-root .ofl-amt{ font-weight:700; color:var(--text); flex-shrink:0; }
+#kkang_phone-root .ofl-del{
+  background:none; border:none; color:var(--text-muted); cursor:pointer;
+  font-size:13px; padding:4px 5px; flex-shrink:0;
+}
+#kkang_phone-root .ofl-del:hover{ color:var(--red); }
+
+/* 사진 없는 인스타 글: 정사각 텍스트 카드 */
+#kkang_phone-root .ig-img.ig-img-text{
+  aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+  padding:26px; box-sizing:border-box;
+  background:linear-gradient(135deg,#434343,#0e0e0e);
+}
+#kkang_phone-root .ig-textcard{
+  color:#fff; font-size:17px; font-weight:600; line-height:1.5; text-align:center;
+  white-space:pre-wrap; word-break:break-word; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:8; -webkit-box-orient:vertical;
+}
+
+/* 사진 없는 OnlyFans 글: 정사각 텍스트 카드 (OF 블루 톤) */
+#kkang_phone-root .of-img.of-img-text{
+  aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
+  padding:26px; box-sizing:border-box;
+  background:linear-gradient(135deg,#0a2a3a,#0e0e0e);
+}
+#kkang_phone-root .of-textcard{
+  color:#fff; font-size:17px; font-weight:600; line-height:1.5; text-align:center;
+  white-space:pre-wrap; word-break:break-word; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:8; -webkit-box-orient:vertical;
+}
+/* OnlyFans 잠금 사진: 강하게 가림(혹시 생성된 경우 대비) */
+#kkang_phone-root .of-img.locked img{filter:blur(50px) brightness(0.55)!important;}
+#kkang_phone-root .of-lock{background:rgba(0,0,0,0.55)!important;}
+/* 라이브 하트 버튼 + 떠오르는 하트 */
+#kkang_phone-root .live-heart-btn{width:38px;height:38px;border-radius:50%;border:1px solid #e0245e;background:none;color:#e0245e;cursor:pointer;font-size:15px;flex-shrink:0;}
+#kkang_phone-root .live-heart-float{position:absolute;bottom:8px;z-index:6;pointer-events:none;animation:heartFloat 2.1s ease-out forwards;}
+@keyframes heartFloat{0%{opacity:0;transform:translateY(0) scale(0.6)}15%{opacity:1}100%{opacity:0;transform:translateY(-150px) scale(1.3) rotate(12deg)}}
+
+/* ===== 라이브 합방(2인 방송) ===== */
+#kkang_phone-root .live-collab-tag{display:inline-block;background:#e1306c;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:6px;letter-spacing:.5px;vertical-align:middle;margin-left:4px;}
+#kkang_phone-root .iglive-duo{display:flex;align-items:center;flex-shrink:0;}
+#kkang_phone-root .iglive-duo .ct-av{width:28px!important;height:28px!important;min-width:28px!important;max-width:28px!important;border:2px solid rgba(255,255,255,.85)!important;border-radius:50%!important;}
+#kkang_phone-root .iglive-duo .ct-av:last-child{margin-left:-12px;}
+#kkang_phone-root .iglive-splittag{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;background:rgba(0,0,0,.45);color:#fff;font-size:11px;font-weight:800;letter-spacing:1px;padding:4px 12px;border-radius:20px;backdrop-filter:blur(3px);pointer-events:none;}
+/* 합방 가운데 세로 구분선 제거(요청) */
+/* (이전: .iglive-collab .iglive-stage::after 세로선 — 삭제) */
+/* 좋아요/리트윗 시 하트 색 강제 — ST 테마가 i{color}를 덮어써서 채워져도 회색으로 보이던 문제(앱아이콘과 동일 원인) */
+#kkang_phone-root .ig-like.on i,#kkang_phone-root .of-like.on i,#kkang_phone-root .ig-clike.on i{color:#e0245e!important;}
+#kkang_phone-root .tw-like.on i,#kkang_phone-root .tw-rlike.on i{color:#f91880!important;}
+#kkang_phone-root .tw-rt.on i{color:#00ba7c!important;}
+/* 하트 누를 때 톡 튀는 피드백 */
+#kkang_phone-root .ig-like.on i,#kkang_phone-root .of-like.on i{animation:likePop .28s cubic-bezier(.34,1.56,.64,1);}
+@keyframes likePop{0%{transform:scale(.7)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+/* 좋아요/리트윗 숫자가 바뀔 때 톡 튀어 '반영됐다'는 게 보이게(인기 트윗은 축약수라 +1이 화면엔 안 보일 수 있어 더 중요) */
+#kkang_phone-root .tw-pop{display:inline-block;animation:twCountPop .32s ease;}
+@keyframes twCountPop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+
+/* ===== 커뮤니티 앱 (블라인드 / 에브리타임) ===== */
+#kkang_phone-root .app-icon-wrap.blind{background:linear-gradient(135deg,#16305f,#1f3b73);color:#fff;}
+#kkang_phone-root .app-icon-wrap.everytime{background:linear-gradient(135deg,#e8341c,#ff5a3c);color:#fff;}
+/* 설정 아이콘 회색 → 컬러(스틸블루 그라데이션) */
+#kkang_phone-root .app-icon-wrap.settings{background:linear-gradient(135deg,#5a7cb5,#3b5a93);color:#fff;}
+#kkang_phone-root .comm-blind{--cac:#1f3b73;}
+#kkang_phone-root .comm-everytime{--cac:#e8341c;}
+/* 이모티콘 피커 '+' 탭 — 피커에서 바로 팩 JSON 추가 */
+#kkang_phone-root .emoji-set-tab.emoji-set-add{display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--border);color:var(--text-muted);font-size:13px;}
+#kkang_phone-root .emoji-set-tab.emoji-set-add:active{color:var(--primary);border-color:var(--primary);}
+/* 협업 팩(가져온 앱/이모티콘) — 기본 배경, 인라인 accent가 덮어씀. 이모지 아이콘 지원 */
+#kkang_phone-root .app-icon-wrap.commpack{background:linear-gradient(135deg,#5a6acf,#7c8aef);color:#fff;}
+#kkang_phone-root .app-emoji{font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;}
+#kkang_phone-root .store-ic .app-emoji{font-size:22px;}
+#kkang_phone-root .comm-head h2 i{color:var(--cac);}
+#kkang_phone-root .s-body.comm-detail-body{display:flex;flex-direction:column;padding:0;overflow:hidden;}
+#kkang_phone-root .comm-scroll{flex:1;overflow-y:auto;}
+#kkang_phone-root .comm-tabs{display:flex;gap:4px;overflow-x:auto;padding:8px 10px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:3;-ms-overflow-style:none;scrollbar-width:none;}
+#kkang_phone-root .comm-tabs::-webkit-scrollbar{display:none;}
+#kkang_phone-root .comm-tab{flex:0 0 auto;border:none;background:var(--card-bg);color:var(--text-sec);border-radius:16px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+#kkang_phone-root .comm-tab.on{background:var(--cac);color:#fff;}
+#kkang_phone-root .comm-list{display:flex;flex-direction:column;}
+#kkang_phone-root .comm-card{padding:13px 14px;border-bottom:1px solid var(--border);cursor:pointer;}
+#kkang_phone-root .comm-card:active{background:var(--bg);}
+#kkang_phone-root .comm-card-title{font-size:14.5px;font-weight:700;color:var(--text);margin-bottom:4px;word-break:break-word;}
+#kkang_phone-root .comm-card-snip{font-size:13px;color:var(--text-sec);line-height:1.45;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+#kkang_phone-root .comm-card-meta{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11px;color:var(--text-muted);flex-wrap:wrap;}
+#kkang_phone-root .comm-card-auth{font-weight:600;color:var(--text-sec);}
+#kkang_phone-root .comm-badge{display:inline-block;background:color-mix(in srgb,var(--cac) 14%,transparent);color:var(--cac);font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:3px;}
+#kkang_phone-root .comm-card-bd{color:var(--cac);font-weight:600;}
+#kkang_phone-root .comm-card-stats{display:flex;gap:14px;margin-top:8px;font-size:11.5px;color:var(--text-muted);}
+#kkang_phone-root .comm-card-stats i{font-size:11px;margin-right:2px;}
+#kkang_phone-root .comm-card-stats .on{color:#e0245e;}
+/* 상세 */
+#kkang_phone-root .comm-detail{padding:14px;border-bottom:8px solid var(--bg);}
+#kkang_phone-root .comm-d-auth{font-size:12.5px;font-weight:700;color:var(--text-sec);margin-bottom:10px;}
+#kkang_phone-root .comm-d-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px;line-height:1.35;word-break:break-word;}
+#kkang_phone-root .comm-d-content{font-size:14px;color:var(--text);line-height:1.6;word-break:break-word;white-space:pre-wrap;}
+#kkang_phone-root .comm-d-time{font-size:11px;color:var(--text-muted);margin-top:12px;}
+#kkang_phone-root .comm-d-actions{display:flex;gap:10px;margin-top:14px;}
+#kkang_phone-root .comm-d-like,#kkang_phone-root .comm-d-scrap{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);background:var(--card-bg);color:var(--text-sec);border-radius:20px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
+#kkang_phone-root .comm-d-like.on{border-color:#e0245e;color:#e0245e;background:color-mix(in srgb,#e0245e 10%,transparent);}
+#kkang_phone-root .comm-d-scrap.on{border-color:#f0a500;color:#f0a500;background:color-mix(in srgb,#f0a500 12%,transparent);}
+#kkang_phone-root .comm-cmt-bar{padding:10px 14px 6px;font-size:12.5px;font-weight:700;color:var(--text-sec);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+#kkang_phone-root .comm-cmts{display:flex;flex-direction:column;}
+#kkang_phone-root .comm-cmt-empty{padding:24px 14px;text-align:center;color:var(--text-muted);font-size:12.5px;}
+#kkang_phone-root .comm-cmt{padding:10px 14px;border-top:1px solid var(--border);}
+#kkang_phone-root .comm-cmt.me{background:color-mix(in srgb,var(--cac) 7%,transparent);}
+#kkang_phone-root .comm-cmt-top{display:flex;align-items:center;gap:8px;margin-bottom:3px;}
+#kkang_phone-root .comm-cmt-name{font-size:12px;font-weight:700;color:var(--text);}
+#kkang_phone-root .comm-cmt.me .comm-cmt-name{color:var(--cac);}
+#kkang_phone-root .comm-cmt-time{font-size:10.5px;color:var(--text-muted);}
+#kkang_phone-root .comm-cmt-text{font-size:13px;color:var(--text);line-height:1.5;word-break:break-word;}
+#kkang_phone-root .comm-cmt-like{margin-top:5px;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11.5px;font-family:inherit;padding:0;}
+#kkang_phone-root .comm-cmt-like.on{color:#e0245e;}
+/* 댓글 액션줄(좋아요·답글) + 대댓글(ㄴ) */
+#kkang_phone-root .comm-cmt-acts{display:flex;align-items:center;gap:16px;margin-top:5px;}
+#kkang_phone-root .comm-cmt-acts .comm-cmt-like{margin-top:0;}
+#kkang_phone-root .comm-cmt-reply{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11.5px;font-family:inherit;padding:0;display:inline-flex;align-items:center;gap:4px;}
+#kkang_phone-root .comm-cmt-reply:active{color:var(--cac);}
+#kkang_phone-root .comm-cmt.replying{background:color-mix(in srgb,var(--cac) 13%,transparent);}
+#kkang_phone-root .comm-reply{padding:8px 14px 8px 30px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--text) 4%,transparent);}
+#kkang_phone-root .comm-reply.me{background:color-mix(in srgb,var(--cac) 8%,transparent);}
+#kkang_phone-root .comm-reply-arrow{color:var(--text-muted);font-size:11px;margin-right:2px;flex-shrink:0;}
+#kkang_phone-root .comm-reply .comm-cmt-name{font-size:11.5px;}
+#kkang_phone-root .comm-reply .comm-cmt-text{font-size:12.5px;}
+/* 답글 작성 모드 안내바 */
+#kkang_phone-root .comm-reply-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 14px;font-size:11.5px;font-weight:700;color:var(--cac);background:color-mix(in srgb,var(--cac) 9%,transparent);border-top:1px solid var(--border);}
+#kkang_phone-root .comm-reply-banner button{background:none;border:none;color:var(--text-muted);font-size:11.5px;font-family:inherit;cursor:pointer;text-decoration:underline;}
+/* 댓글 입력바 */
+#kkang_phone-root .comm-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid var(--border);background:var(--card-bg);}
+#kkang_phone-root .comm-input{flex:1;height:38px;border:1px solid var(--border);border-radius:19px;padding:0 14px;font-size:13px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;min-width:0;}
+#kkang_phone-root .comm-input:focus{border-color:var(--cac);}
+#kkang_phone-root .comm-send{width:38px;height:38px;border-radius:50%;border:none;background:var(--cac);color:#fff;cursor:pointer;font-size:14px;flex-shrink:0;}
+/* 종이비행기 글리프 흰색 강제 — ST 테마가 i{color}를 덮어써서 회색으로 보이던 문제(앱아이콘·하트와 동일 원인) */
+#kkang_phone-root .comm-send i{color:#fff!important;}
+#kkang_phone-root .comm-board-sel{font-family:inherit;}
+
+/* 깡통 — 커뮤니티 엔진 재사용. 아이콘만 핑크→퍼플, 본문은 comm-* 공통 + --cac 핑크 */
+#kkang_phone-root .app-icon-wrap.kkangton{background:linear-gradient(135deg,#d1428c,#9b59b6);color:#fff;}
+#kkang_phone-root .comm-kkangton{--cac:#d1428c;}
+
+/* ===== 폰 지역·언어 설정 버튼 ===== */
+#kkang_phone-root .locale-grid{display:flex;flex-wrap:wrap;gap:6px;}
+#kkang_phone-root .locale-btn{flex:0 0 auto;border:1.5px solid var(--border);background:var(--card-bg);color:var(--text);border-radius:18px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;}
+#kkang_phone-root .locale-btn.on{border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 10%,transparent);}
+
+/* ===== 설정 탭 (일반 / 세계관) ===== */
+#kkang_phone-root .settings-tabs{display:flex;gap:6px;padding:4px;margin:0 0 6px;background:var(--bg);border-radius:12px;}
+#kkang_phone-root .settings-tab{flex:1;height:38px;border:none;background:transparent;color:var(--text-sec);font-size:13.5px;font-weight:700;border-radius:9px;cursor:pointer;font-family:inherit;transition:all .14s;}
+#kkang_phone-root .settings-tab:hover{color:var(--text);}
+#kkang_phone-root .settings-tab.on{background:var(--card-bg);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+
+/* ===== OnlyFans 내 계정 / 게시물 작성 ===== */
+#kkang_phone-root .of-mine-badge{ display:inline-block; font-size:10px; font-weight:700; color:#fff; background:#00aff0; border-radius:8px; padding:1px 7px; margin-left:5px; vertical-align:middle; }
+#kkang_phone-root .of-lock-pick{ display:flex; gap:8px; }
+#kkang_phone-root .of-lock-pick label{ flex:1; display:flex; align-items:center; justify-content:center; gap:5px; font-size:12.5px; font-weight:600; color:var(--text); border:1.5px solid var(--border); border-radius:10px; padding:8px 4px; cursor:pointer; }
+#kkang_phone-root .of-lock-pick input{ accent-color:var(--primary); }
+
+/* ===== 멤버 선택 / 대화상대 선택 모달 아바타 원형 고정 (가로로 늘어나는 현상 방지) ===== */
+#kkang_phone-root .member-check{ flex-wrap:nowrap; }
+#kkang_phone-root .member-check > .avatar,
+#kkang_phone-root .member-check > img,
+#kkang_phone-root .dm-pick-row > .avatar,
+#kkang_phone-root .dm-pick-row > img{
+  flex:0 0 38px !important; width:38px !important; height:38px !important;
+  min-width:38px !important; max-width:38px !important; border-radius:50% !important;
+  aspect-ratio:1/1; object-fit:cover; padding:0 !important; box-sizing:border-box;
+}
+/* ===== 메시지 초기화 모달: 행을 카드로 구분 + 아바타 원형 고정(.avatar 늘어남 방지) ===== */
+#kkang_phone-root .clr-row{
+  display:flex; align-items:center; gap:10px; padding:7px 9px; margin-bottom:6px;
+  cursor:pointer; border:1px solid var(--border); border-radius:10px; background:var(--card-bg);
+}#kkang_phone-root .clr-row:active{ background:var(--bg); }#kkang_phone-root .clr-row input[type="checkbox"]{ width:17px; height:17px; accent-color:var(--primary); flex-shrink:0; }
+#kkang_phone-root .clr-row > .avatar,
+#kkang_phone-root .clr-row > img.clr-av{
+  flex:0 0 36px !important; width:36px !important; height:36px !important;
+  min-width:36px !important; max-width:36px !important; border-radius:50% !important;
+  aspect-ratio:1/1; object-fit:cover; padding:0 !important; box-sizing:border-box;
+}#kkang_phone-root .clr-row > .grp-av-wrap{ flex:0 0 36px; }#kkang_phone-root .clr-name{ font-size:13px; font-weight:600; color:var(--text); flex:1; min-width:0; }#kkang_phone-root .clr-sub{ font-size:11px; font-weight:400; color:var(--text-muted); }#kkang_phone-root .clr-empty{ font-size:12px; color:var(--text-muted); padding:8px 2px; }
+#kkang_phone-root .member-check .mc-name{ flex:1 1 auto; min-width:0; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* ===== 스토어 받기 다운로드 애니메이션 + 고정 버튼 피드백 ===== */
+#kkang_phone-root .store-btn.get.downloading{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  background:var(--card-bg); color:var(--primary); border:1px solid var(--primary); cursor:default; min-width:64px;
+}
+#kkang_phone-root .store-dlbar{ width:100%; height:4px; border-radius:2px; background:color-mix(in srgb,var(--primary) 22%,transparent); overflow:hidden; }
+#kkang_phone-root .store-dlfill{ display:block; height:100%; width:0; border-radius:2px; background:var(--primary); animation:storeDl .82s ease-out forwards; }
+@keyframes storeDl{ 0%{width:0} 60%{width:72%} 100%{width:100%} }
+#kkang_phone-root .store-dltxt{ font-size:10.5px; font-weight:700; }
+#kkang_phone-root .store-pin{ transition:color .15s, transform .12s; }
+/* 핀셋(📌) 글리프 색 강제 — ST 테마가 i{color}를 덮어써서 고정해도 파란불이 안 들어오던 문제(앱아이콘·하트와 동일 원인). 평소 회색, 고정 시 파란색 */
+#kkang_phone-root .store-pin i{ color:var(--text-muted)!important; }
+#kkang_phone-root .store-pin.on i{ color:var(--primary)!important; }
+#kkang_phone-root .store-pin.pin-pop{ animation:pinPop .34s ease; }
+@keyframes pinPop{ 0%{transform:scale(1)} 35%{transform:scale(1.45) rotate(-12deg)} 100%{transform:scale(1) rotate(0)} }
+
+/* ===== 데이터 접이식 섹션 ===== */
+#kkang_phone-root .data-section{ margin-top:6px; border:1px solid var(--border); border-radius:12px; overflow:hidden; background:var(--white); }
+#kkang_phone-root .data-summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:13px 14px; font-size:13.5px; font-weight:600; color:var(--text); user-select:none; }
+#kkang_phone-root .data-summary::-webkit-details-marker{ display:none; }
+#kkang_phone-root .data-summary > span{ flex:1; }
+#kkang_phone-root .data-summary .data-caret{ transition:transform .2s; color:var(--text-sec); font-size:12px; }
+#kkang_phone-root .data-section[open] .data-summary .data-caret{ transform:rotate(180deg); }
+#kkang_phone-root .data-body{ padding:0 10px 10px; display:flex; flex-direction:column; gap:6px; }
+
+/* ===== 전원 OFF 화면 ===== */
+#kkang_phone-root .power-screen{ position:absolute; inset:0; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:6; }
+#kkang_phone-root .power-btn{ width:84px; height:84px; border-radius:50%; border:2px solid rgba(255,255,255,0.25); background:rgba(255,255,255,0.06); color:#fff; font-size:34px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform .15s, background .15s; }
+#kkang_phone-root .power-btn:active{ transform:scale(0.92); background:rgba(255,255,255,0.16); }
+#kkang_phone-root .power-btn > i{ color:#fff !important; }
+#kkang_phone-root .power-hint{ color:rgba(255,255,255,0.5); font-size:12px; }
+#kkang_phone-root .sb-power{ cursor:pointer; opacity:0.65; transition:opacity .15s; }
+#kkang_phone-root .sb-power:active{ opacity:1; }
+
+/* ===== 글로벌 알림 (ST 채팅 위, 폰 닫혀도 표시) — 기능 ① ===== */
+/* #kkang_phone-root 밖(document.body)이라 변수 안 쓰고 고정색 사용 */
+#kp-global-notif-wrap{ position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:99999; display:flex; flex-direction:column; gap:8px; width:min(420px,92vw); pointer-events:none; }
+#kp-global-notif-wrap .kp-global-notif{ pointer-events:auto; display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:14px; background:rgba(28,28,32,0.96); color:#fff; box-shadow:0 6px 24px rgba(0,0,0,0.4); cursor:pointer; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); animation:kpgIn .25s ease-out; font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif; }
+@keyframes kpgIn{ from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+#kp-global-notif-wrap .kpg-icon{ width:34px;height:34px;border-radius:9px;background:#0A84FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:#fff; }
+#kp-global-notif-wrap .kpg-icon i{ color:#fff !important; }
+#kp-global-notif-wrap .kpg-av{ width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0; }
+#kp-global-notif-wrap .kpg-av-init{ display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px; }
+#kp-global-notif-wrap .kpg-body{ flex:1;min-width:0; }
+#kp-global-notif-wrap .kpg-title{ font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+#kp-global-notif-wrap .kpg-preview{ font-size:12px;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px; }
+#kp-global-notif-wrap .kpg-close{ width:26px;height:26px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.6);flex-shrink:0; }
+#kp-global-notif-wrap .kpg-close i{ color:rgba(255,255,255,0.6) !important; }
+#kp-global-notif-wrap .kpg-call-btns{ display:flex;gap:8px;flex-shrink:0; }
+#kp-global-notif-wrap .kpg-call-btn{ width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;cursor:pointer; }
+#kp-global-notif-wrap .kpg-call-btn i{ color:#fff !important; }
+#kp-global-notif-wrap .kpg-call-btn.accept{ background:#34C759; }
+#kp-global-notif-wrap .kpg-call-btn.reject{ background:#FF3B30; }
+#kp-global-notif-wrap .kpg-call-btn:active{ transform:scale(0.9); }
