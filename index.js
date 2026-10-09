@@ -345,6 +345,8 @@
     const willShow = root.style.display === "none";
     setPhoneVisible(willShow);
     if (willShow && typeof clearPhoneUiFromChat === "function") { try { clearPhoneUiFromChat(); } catch (e) {} }
+    // 폰을 다시 열 때 설정 화면이면 일반 탭부터
+    if (willShow && currentScreen === 'settings' && _settingsTab !== 'general') { _settingsTab = 'general'; try { renderScreen(); } catch (e) {} }
   }
 
   function mountPhone() {
@@ -1734,7 +1736,6 @@ function _normalizePhoneData(data) {
   if (data.settings.currency === undefined) data.settings.currency = 'auto';
   if (data.settings.phoneProfileId === undefined) data.settings.phoneProfileId = ''; // '' = 메인 채팅과 동일한 현재 연결 사용
   if (data.settings.useWorldInfo === undefined) data.settings.useWorldInfo = false; // 기본 OFF(유저 요청 — 토큰 절약, 다인봇·로어북 봇에서만 켜기). 켜면 SNS가 세계관 전체 자동 인식
-  if (data.settings.wiBudget === undefined) data.settings.wiBudget = 15000; // 월드 인식 분량(자) — SNS 전체주입 총 캡. 인물 많으면 인물당 자동 압축, 많이 넣으려면 ↑
   if (data.settings.textMaskOn === undefined) data.settings.textMaskOn = false; // 폰꾸: 텍스트 가리기(치환) 적용 여부
   if (!Array.isArray(data.settings.textMaskRules)) data.settings.textMaskRules = []; // [{from,to}] — 보기 전용 비파괴 치환
   if (data.settings.twName === undefined) data.settings.twName = ''; // 트위터 표시 닉네임(비우면 페르소나 이름)
@@ -1969,6 +1970,7 @@ function _applyNav(screen, params) {
   hideCtx(); hideEmojiPicker(); hideMentionPicker();
   _commOpenId = null; // 커뮤니티 글 열람 상태 초기화(다른 화면 이동 시 목록부터)
   _twOpenId = null;   // 트윗 상세 열람 상태 초기화
+  if (screen === 'settings' && currentScreen !== 'settings') _settingsTab = 'general'; // 설정은 들어올 때마다 일반 탭부터
   currentScreen = screen;
   if (params.contact !== undefined) currentContact = params.contact;
   if (params.groupId !== undefined) currentGroupId = params.groupId;
@@ -2988,7 +2990,7 @@ async function retrySend(name) {
   rDMChat(_kpEl('screen'), name);
   showDmTyping(name);
   var conv = ensureConv(name);
-  var recent = conv.messages.slice(-DM_CTX_LINES).map(function(m) {
+  var recent = conv.messages.slice(-_kpDmMemory()).map(function(m) {
     return (m.from === 'user' ? 'User' : name) + ': ' + m.text;
   }).join('\n');
   var groupCtx = getGroupContextFor(name);
@@ -3432,7 +3434,7 @@ function sendCallInput(name) {
 }
 
 // ===== RENDER: SETTINGS =====
-var _settingsTab = 'general'; // 'general' | 'world'
+var _settingsTab = 'general'; // 'general' | 'msg' | 'world' | 'deco'
 function setSettingsTab(t) { _settingsTab = t; rSettings(_kpEl('screen')); }
 // 스크롤 위치를 보존하며 설정 화면을 다시 그린다 (모드/테마 변경 시 맨 위로 튀는 것 방지)
 function _rSettingsKeep() {
@@ -3542,9 +3544,7 @@ function setProbSetting(key, v) {
   if (!phoneData.settings) phoneData.settings = {};
   phoneData.settings[key] = n;
   saveData();
-  var r = _kpEl(key + '-range'); if (r) r.value = n;
   var num = _kpEl(key + '-num'); if (num) num.value = n;
-  var val = _kpEl(key + '-val'); if (val) val.textContent = n + '%';
 }
 // 채팅 인지량 = 최신 N챗 — 메시지를 자르지 않고 그대로 넣으므로 긴 메시지면 토큰이 커질 수 있음
 // (글자 수 기준 모드 setCtxChars/setCtxMode는 제거 — 인지량 기준을 N챗 하나로 단순화)
@@ -3555,23 +3555,8 @@ function setCtxMsgs(v) {
   if (!phoneData.settings) phoneData.settings = {};
   phoneData.settings.chatCtxMsgs = n;
   saveData();
-  var r = _kpEl('ctx-msgs-range'); if (r) r.value = n;
   var num = _kpEl('ctx-msgs-num'); if (num) num.value = n;
-  var val = _kpEl('ctx-msgs-val'); if (val) val.textContent = '최신 ' + n + '챗';
   showToast('채팅 인지량: 최신 ' + n + '챗');
-}
-// 월드 인식 분량(SNS 전체주입 총 캡, 자) — 인물 많은 봇이면 올려서 더 담음
-function setWiBudget(v) {
-  var n = Math.round(Number(v) || 0);
-  if (!n) n = 15000;
-  n = Math.max(2000, Math.min(40000, n));
-  if (!phoneData.settings) phoneData.settings = {};
-  phoneData.settings.wiBudget = n;
-  saveData();
-  var r = _kpEl('wib-range'); if (r) r.value = n;
-  var num = _kpEl('wib-num'); if (num) num.value = n;
-  var val = _kpEl('wib-val'); if (val) val.textContent = n.toLocaleString() + '자';
-  showToast('월드 인식 분량: ' + n.toLocaleString() + '자');
 }
 function powerOnPhone() {
   if (!phoneData.settings) phoneData.settings = {};
@@ -3589,6 +3574,11 @@ function powerOffPhone() {
   closeAppDrawer();
   currentScreen = 'home'; // 다음에 켤 때 홈부터
   renderScreen();
+}
+// 설정용 숫자 입력 칸(게이지 대신) — [ 숫자 ] 단위. 범위 밖 값은 각 setter가 잘라서 다시 채운다.
+function _kpNumBox(id, val, min, max, unit, onchange) {
+  return '<div class="kp-num"><input type="number" class="modal-input" id="' + id + '" min="' + min + '" max="' + max + '" step="1" value="' + val + '" onchange="' + onchange + '">' +
+    (unit ? '<span class="kp-num-unit">' + unit + '</span>' : '') + '</div>';
 }
 function rSettings(el) {
   var avatarImg = _getMeta(_META_KEY_AVATAR);
@@ -3640,6 +3630,7 @@ function rSettings(el) {
   var tabBar =
     '<div class="settings-tabs">' +
       '<button class="settings-tab' + (tab==='general'?' on':'') + '" onclick="setSettingsTab(\'general\')">일반</button>' +
+      '<button class="settings-tab' + (tab==='msg'?' on':'') + '" onclick="setSettingsTab(\'msg\')">📞 문자·전화</button>' +
       '<button class="settings-tab' + (tab==='world'?' on':'') + '" onclick="setSettingsTab(\'world\')">🌐 세계관</button>' +
       '<button class="settings-tab' + (tab==='deco'?' on':'') + '" onclick="setSettingsTab(\'deco\')">🎨 폰꾸</button>' +
     '</div>';
@@ -3712,15 +3703,9 @@ function rSettings(el) {
   // 기준 2종: 글자 수 예산(기본, 압축) vs 최신 N챗(메시지를 자르지 않고 통째 — 토큰 무관)
   var ctxGaugeHtml = (phoneData.settings.lightMode === false || phoneData.settings.chatAware === false) ? '' : (function() {
     var cm = Math.max(1, Math.min(50, Number(phoneData.settings.chatCtxMsgs) || 5));
-    return '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:6px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between"><div class="settings-label">📜 채팅 인지량</div><b id="ctx-msgs-val" style="color:var(--primary);font-size:13px">최신 ' + cm + '챗</b></div>' +
-      '<div class="settings-desc">최근 메시지 <b>' + cm + '개를 자르지 않고 통째로</b> 폰 요청에 끼워줍니다. 메시지가 길고 많으면 <b>호출당 토큰이 크게 늘 수 있어요.</b></div>' +
-      '<div style="display:flex;gap:8px;align-items:center">' +
-        '<input type="range" id="ctx-msgs-range" min="1" max="50" step="1" value="' + cm + '" style="flex:1;accent-color:var(--primary);height:22px" ' +
-          'oninput="var n=_kpEl(\'ctx-msgs-num\');if(n)n.value=this.value;var v=_kpEl(\'ctx-msgs-val\');if(v)v.textContent=\'최신 \'+this.value+\'챗\';" ' +
-          'onchange="setCtxMsgs(this.value)">' +
-        '<input type="number" class="modal-input" id="ctx-msgs-num" min="1" max="50" step="1" value="' + cm + '" style="width:78px;height:32px;font-size:12px;text-align:center;margin:0" onchange="setCtxMsgs(this.value)">' +
-      '</div>' +
+    return '<div class="settings-item">' +
+      '<div><div class="settings-label">📜 채팅 인지량</div><div class="settings-desc">최근 메인 채팅을 <b>자르지 않고 통째로</b> 폰 요청에 끼워줘요(1~50). 많을수록 <b>호출당 토큰이 크게 늘어요.</b></div></div>' +
+      _kpNumBox('ctx-msgs-num', cm, 1, 50, '챗', 'setCtxMsgs(this.value)') +
     '</div>';
   })();
 
@@ -3754,57 +3739,18 @@ function rSettings(el) {
       '<div class="settings-item"><div><div class="settings-label">📖 채팅 내용 인지</div><div class="settings-desc">폰(문자·전화·SNS)이 <b>현재 채팅방 내용·상황을 인지</b>하고 반응합니다. 카드 요약+최근 대화를 압축해 끼워넣는 방식이라 저렴해요(끄면 더 저렴·폰만의 세계). <b>삭제 메시지 40% 인식</b> 포함. ※ 경량 API 호출이 꺼져 있으면 메인 채팅이 통째로 들어가 이 토글과 무관하게 항상 인지합니다.</div></div>' +
         '<div class="toggle ' + (phoneData.settings.chatAware !== false ? 'on' : '') + '" onclick="toggleSetting(\'chatAware\',this,true)"></div></div>' +
       ctxGaugeHtml +
-      // 📚 월드인포 참조 — 시뮬·다인봇처럼 인물 정보가 카드가 아닌 월드인포에 있는 경우 필수 (기본 OFF)
-      '<div class="settings-item"><div><div class="settings-label">📚 월드인포 참조</div><div class="settings-desc">카드에 <b>연결된 월드인포</b>에서 인물의 외형·말투·설정을 끌어옵니다(기본 꺼짐). <b>시뮬봇·다인봇</b>처럼 개별 인물 정보가 카드 설명이 아니라 월드인포에 들어있는 경우 켜세요 — 꺼두면 그런 인물의 외형·말투를 못 읽어 엉뚱하게 답합니다. <b>SNS 피드(트위터 등)는 자동으로 세계관·전 인물을 통째 인식</b>하고, 특정 상대와의 문자는 그 인물 시트만 봐요. 월드인포가 없으면 카드 설명으로 대신합니다. <b>주입깊이(@Depth) 항목의 상태창·선택지·변수 지시문은 자동 제외</b>(폰엔 세계관·인물만 필요). (디스크립션은 이 토글과 무관하게 항상 읽습니다.)</div></div>' +
+      // 📚 월드인포 참고 — 켜면 아래에 로어북·항목 선택기와 최대 토큰이 나온다(선택은 봇별 저장)
+      '<div class="settings-item"><div><div class="settings-label">📚 월드인포 참고</div><div class="settings-desc">로어북에서 <b>체크한 항목만</b> 폰 AI에게 보내요. 인물·세계관 항목만 고르고, 상태창·선택지 같은 지시문은 빼는 걸 추천해요. 끄면 카드·채팅만 참고하고, 골라둔 항목은 그대로 남아요.</div></div>' +
         '<div class="toggle ' + (phoneData.settings.useWorldInfo === true ? 'on' : '') + '" onclick="toggleSetting(\'useWorldInfo\',this,true)"></div></div>' +
-      // 📐 월드 인식 분량 — SNS 전체주입 총 캡(자). 인물 많으면 인물당 자동 압축. 참조 ON일 때만 노출(토글이 rerender=true라 즉시 열림/닫힘)
       (phoneData.settings.useWorldInfo === true ? (function() {
-        var wb = Math.max(2000, Math.min(40000, Number(phoneData.settings.wiBudget) || 15000));
-        return '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:6px">' +
-          '<div style="display:flex;align-items:center;justify-content:space-between"><div class="settings-label">📐 월드 인식 분량</div><b id="wib-val" style="color:var(--primary);font-size:13px">' + wb.toLocaleString() + '자</b></div>' +
-          '<div class="settings-desc">SNS 피드(트위터·블라/에타)가 인식할 월드인포 <b>총 분량</b>(대략 토큰 = 글자÷3~4). 인물이 많으면 <b>인물당 자동 압축</b>해 이 한도 안에 다 담아요 — <b>10·20명+ 봇이면 올리세요.</b> 인물당 최대 2,400자(보통 한 명이면 풀로 들어감).</div>' +
-          '<div style="display:flex;gap:8px;align-items:center">' +
-            '<input type="range" id="wib-range" min="2000" max="40000" step="1000" value="' + wb + '" style="flex:1;accent-color:var(--primary);height:22px" ' +
-              'oninput="var n=_kpEl(\'wib-num\');if(n)n.value=this.value;var v=_kpEl(\'wib-val\');if(v)v.textContent=Number(this.value).toLocaleString()+\'자\';" ' +
-              'onchange="setWiBudget(this.value)">' +
-            '<input type="number" class="modal-input" id="wib-num" min="2000" max="40000" step="1000" value="' + wb + '" style="width:78px;height:32px;font-size:12px;text-align:center;margin:0" onchange="setWiBudget(this.value)">' +
-          '</div>' +
-        '</div>';
-      })() : '') +
-      '<div class="settings-item"><div><div class="settings-label">📲 채팅 연동 알림 (양방향)</div><div class="settings-desc">NPC가 <b>먼저 연락</b>하는 모든 기능의 마스터 스위치예요 — 메인 채팅 흐름을 보고 폰으로 문자·전화하는 것 + 폰 사용 중 NPC가 설정한 확률만큼 먼저 DM·전화하는 것 전부. 폰을 닫아놔도 <b>채팅 화면 위로 알림</b>이 떠서 바로 받을 수 있습니다. 폰 활동은 반대로 채팅에도 인식돼요. (쿨다운·확률 제한, API 호출)</div></div>' +
-        '<div class="toggle ' + (phoneData.settings.liveNotify ? 'on' : '') + '" onclick="toggleSetting(\'liveNotify\',this,true)"></div></div>' +
-      // 🗂️ 연락처 자동 추가 · 💬 단톡 자동 초대 — 채팅 연동 알림 ON일 때만 노출. AI 액션 태그를 옵트인(가이드 약 매 호출마다 +250토큰/개)
-      (phoneData.settings.liveNotify ?
-        '<div class="settings-item"><div><div class="settings-label">🗂️ 연락처 자동 추가</div><div class="settings-desc">스토리에서 번호를 주고받는 등 흐름이 생기면 AI가 그 인물을 <b>연락처에 자동 저장</b>합니다. 켜면 메인 채팅에 안내 지시문이 붙어요 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
-          '<div class="toggle ' + (phoneData.settings.autoContactCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoContactCreate\',this)"></div></div>' +
-        '<div class="settings-item"><div><div class="settings-label">💬 단톡 자동 초대</div><div class="settings-desc">스토리에서 단체방이 만들어지거나 누가 초대되면 AI가 <b>그룹 채팅을 자동 생성·초대</b>합니다 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
-          '<div class="toggle ' + (phoneData.settings.autoGroupCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoGroupCreate\',this)"></div></div>'
-        : '') +
-      // 🎚️ 먼저 연락 확률 슬라이더 3종 — 채팅 연동 알림 ON일 때만 표시
-      (phoneData.settings.liveNotify ? (function() {
-        function probRow(key, def, label, desc) {
-          var v = Math.max(0, Math.min(100, isFinite(Number(phoneData.settings[key])) ? Number(phoneData.settings[key]) : def));
-          return '<div style="margin-top:6px">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--text)">' + label + '</span><b id="' + key + '-val" style="color:var(--primary);font-size:12px">' + v + '%</b></div>' +
-            '<div style="font-size:10.5px;color:var(--text-muted);margin:1px 0 3px">' + desc + '</div>' +
-            '<div style="display:flex;gap:8px;align-items:center">' +
-              '<input type="range" id="' + key + '-range" min="0" max="100" step="1" value="' + v + '" style="flex:1;accent-color:var(--primary);height:20px" ' +
-                'oninput="var n=_kpEl(\'' + key + '-num\');if(n)n.value=this.value;var t=_kpEl(\'' + key + '-val\');if(t)t.textContent=this.value+\'%\';" ' +
-                'onchange="setProbSetting(\'' + key + '\',this.value)">' +
-              '<input type="number" class="modal-input" id="' + key + '-num" min="0" max="100" step="1" value="' + v + '" style="width:62px;height:28px;font-size:12px;text-align:center;margin:0" onchange="setProbSetting(\'' + key + '\',this.value)">' +
-            '</div>' +
+        var c = _kpWIPickCfg() || {};
+        var mx = _kpWIMaxTokens(c);
+        return '<div class="settings-item kp-wi-box" id="kp-wi-picker"><div class="settings-desc">로어북 불러오는 중…</div></div>' +
+          '<div class="settings-item">' +
+            '<div><div class="settings-label">월드인포 최대 토큰</div><div class="settings-desc">고른 항목의 합계 한도(200~40,000). 넘치면 목록 아래쪽 항목부터 빠져요.</div></div>' +
+            _kpNumBox('kp-wi-max', mx, 200, 40000, '토큰', 'kpWISetMax(this.value)') +
           '</div>';
-        }
-        return '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:2px">' +
-          '<div><div class="settings-label">🎚️ 먼저 연락 확률(API호출)</div><div class="settings-desc">NPC가 먼저 연락하는 빈도를 조절합니다. 0% = 그 기능만 끔.</div></div>' +
-          probRow('probChatContact', 18, '💬 채팅 반응 연락', '메인 채팅 메시지마다 맥락 보고 문자·전화할 확률 (2.5분 쿨다운)') +
-          probRow('probFirstDm', 15, '📨 랜덤 먼저 DM', '폰 사용 중 NPC가 불쑥 먼저 문자할 확률') +
-          probRow('probIncomingCall', 8, '📞 랜덤 수신 전화', '대화 중인 상대가 불쑥 전화 걸 확률 (3분 쿨다운)') +
-        '</div>';
       })() : '') +
-      // (삭제 메시지 인지 → 채팅 내용 인지에 흡수 / NPC 먼저 DM·수신 전화 → 채팅 연동 알림에 흡수
-      '<div class="settings-item"><div><div class="settings-label">🎬 통화 자막 애니메이션</div><div class="settings-desc">통화 중 대사를 문장 단위로 순서대로 표시</div></div>' +
-        '<div class="toggle ' + (phoneData.settings.callSubtitleAnim ? 'on' : '') + '" onclick="toggleSetting(\'callSubtitleAnim\',this)"></div></div>' +
       '<div class="settings-item"><div><div class="settings-label">🎨 AI 이미지 생성</div><div class="settings-desc">사진 전송 시 AI로 이미지를 생성합니다. <b>이미지 태그 규칙과 온팬 지침(프롬프트)만 모든 봇 공통</b>이고, 나머지(외형·토글 등)는 봇별이에요.</div></div>' +
         '<div class="toggle ' + (phoneData.settings.imageGen ? 'on' : '') + '" onclick="toggleSetting(\'imageGen\',this,true)"></div></div>' +
       // 🪄 오토픽 연동 — AI 이미지 생성 ON + AutoPic 확장이 설치된 경우에만 노출
@@ -3841,6 +3787,41 @@ function rSettings(el) {
         '</div>' +
       '</details>';
 
+  // ── 문자·전화 탭: 기억량 · 통화 자막 · 먼저 연락(채팅 연동 알림·자동 추가·확률) ──
+  var msgTab =
+      '<div class="settings-item"><div><div class="settings-label">💬 기억하는 문자</div><div class="settings-desc">문자 답장·통화 때 그 사람과의 최근 문자를 몇 개까지 보는지 (5~100, 기본 30). 많을수록 잘 기억하지만 토큰이 늘어요.</div></div>' +
+        _kpNumBox('mem-dmMemory', _kpDmMemory(), 5, 100, '개', 'setMemorySetting(\'dmMemory\',this.value,5,100)') + '</div>' +
+      '<div class="settings-item"><div><div class="settings-label">📞 기억하는 통화</div><div class="settings-desc">문자 답장·통화 때 그 사람과의 지난 통화를 몇 통까지 보는지 (0~5, 기본 1). 0 = 안 봄.</div></div>' +
+        _kpNumBox('mem-callMemory', _kpCallMemory(), 0, 5, '통', 'setMemorySetting(\'callMemory\',this.value,0,5)') + '</div>' +
+      '<div class="settings-item"><div><div class="settings-label">🎬 통화 자막 애니메이션</div><div class="settings-desc">통화 중 대사를 문장 단위로 순서대로 표시</div></div>' +
+        '<div class="toggle ' + (phoneData.settings.callSubtitleAnim ? 'on' : '') + '" onclick="toggleSetting(\'callSubtitleAnim\',this)"></div></div>' +
+      '<div class="settings-item"><div><div class="settings-label">📲 채팅 연동 알림 (양방향)</div><div class="settings-desc">NPC가 <b>먼저 연락</b>하는 모든 기능의 마스터 스위치예요 — 메인 채팅 흐름을 보고 폰으로 문자·전화하는 것 + 폰 사용 중 NPC가 설정한 확률만큼 먼저 DM·전화하는 것 전부. 폰을 닫아놔도 <b>채팅 화면 위로 알림</b>이 떠서 바로 받을 수 있습니다. 폰 활동은 반대로 채팅에도 인식돼요. (쿨다운·확률 제한, API 호출)</div></div>' +
+        '<div class="toggle ' + (phoneData.settings.liveNotify ? 'on' : '') + '" onclick="toggleSetting(\'liveNotify\',this,true)"></div></div>' +
+      // 🗂️ 연락처 자동 추가 · 💬 단톡 자동 초대 — 채팅 연동 알림 ON일 때만 노출. AI 액션 태그를 옵트인(가이드 약 매 호출마다 +250토큰/개)
+      (phoneData.settings.liveNotify ?
+        '<div class="settings-item"><div><div class="settings-label">🗂️ 연락처 자동 추가</div><div class="settings-desc">스토리에서 번호를 주고받는 등 흐름이 생기면 AI가 그 인물을 <b>연락처에 자동 저장</b>합니다. 켜면 메인 채팅에 안내 지시문이 붙어요 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
+          '<div class="toggle ' + (phoneData.settings.autoContactCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoContactCreate\',this)"></div></div>' +
+        '<div class="settings-item"><div><div class="settings-label">💬 단톡 자동 초대</div><div class="settings-desc">스토리에서 단체방이 만들어지거나 누가 초대되면 AI가 <b>그룹 채팅을 자동 생성·초대</b>합니다 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
+          '<div class="toggle ' + (phoneData.settings.autoGroupCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoGroupCreate\',this)"></div></div>'
+        : '') +
+      // 🎚️ 먼저 연락 확률 슬라이더 3종 — 채팅 연동 알림 ON일 때만 표시
+      (phoneData.settings.liveNotify ? (function() {
+        function probRow(key, def, label, desc) {
+          var v = Math.max(0, Math.min(100, isFinite(Number(phoneData.settings[key])) ? Number(phoneData.settings[key]) : def));
+          return '<div class="kp-num-row">' +
+            '<div><div style="font-size:12.5px;font-weight:600;color:var(--text)">' + label + '</div><div style="font-size:10.5px;color:var(--text-muted)">' + desc + '</div></div>' +
+            _kpNumBox(key + '-num', v, 0, 100, '%', 'setProbSetting(\'' + key + '\',this.value)') +
+          '</div>';
+        }
+        return '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:2px">' +
+          '<div><div class="settings-label">🎚️ 먼저 연락 확률(API호출)</div><div class="settings-desc">NPC가 먼저 연락하는 빈도를 조절합니다. 0% = 그 기능만 끔.</div></div>' +
+          probRow('probChatContact', 18, '💬 채팅 반응 연락', '메인 채팅 메시지마다 맥락 보고 문자·전화할 확률 (2.5분 쿨다운)') +
+          probRow('probFirstDm', 15, '📨 랜덤 먼저 DM', '폰 사용 중 NPC가 불쑥 먼저 문자할 확률') +
+          probRow('probIncomingCall', 8, '📞 랜덤 수신 전화', '대화 중인 상대가 불쑥 전화 걸 확률 (3분 쿨다운)') +
+        '</div>';
+      })() : '') +
+      '';
+
   el.innerHTML =
     '<div class="s-header"><button class="btn-icon" onclick="nav(\'home\')"><i class="fas fa-chevron-left"></i></button><h2>설정</h2></div>' +
     '<div class="s-body">' +
@@ -3850,10 +3831,11 @@ function rSettings(el) {
       '</div>' +
       statusHtml +
       tabBar +
-      (tab === 'world' ? worldTab : (tab === 'deco' ? decoTab : generalTab)) +
-      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v1.0.4 · <u>🐞 디버그 로그</u></div></div>' +
+      (tab === 'world' ? worldTab : (tab === 'deco' ? decoTab : (tab === 'msg' ? msgTab : generalTab))) +
+      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v1.1.0 · <u>🐞 디버그 로그</u></div></div>' +
     '</div>';
   try { _kpApplyMaskDOM(); } catch (e) {} // 텍스트 가리기 적용(설정 화면 자체도 — 규칙 편집칸은 data-nomask로 제외)
+  if (tab === 'general' && phoneData.settings.useWorldInfo === true) _kpDrawWIPicker(); // 로어북 항목은 비동기로 채움
 }
 // ── 디버그 로그 화면 ──────────────────────────────────────────
 // 모바일에선 콘솔을 못 보므로 "안 됨"의 원인(JS 에러·충돌·태그 변환 경로)을 여기서 확인/복사한다.
@@ -4025,6 +4007,16 @@ function importContacts() {
   if (inp) inp.click();
 }
 // 연락처 화면 톱니바퀴 → 백업/가져오기 메뉴
+// 문자·전화 탭 기억량 저장(범위 밖 값은 잘라서 칸에 다시 채움)
+function setMemorySetting(key, v, min, max) {
+  var n = Math.round(Number(v));
+  if (!isFinite(n)) return;
+  n = Math.max(min, Math.min(max, n));
+  if (!phoneData.settings) phoneData.settings = {};
+  phoneData.settings[key] = n;
+  saveData();
+  var inp = _kpEl('mem-' + key); if (inp) inp.value = n;
+}
 function showContactsMenu() {
   showModal(
     '<div class="modal-dialog">' +
@@ -4518,7 +4510,7 @@ function _isolatedCtxBlock(name) {
   //   . 로어북 있으면 전체 합본, 없으면 현재 카드 본문 폴백.
   //   · 특정 연락처 DM/통화(name 있음) → 그 인물 관련 시트만(아래) — 집중·저렴. (전체는 불필요·토큰낭비)
   if (!name && s.useWorldInfo === true) {
-    var world = _kpWIAll(Math.max(2000, Math.min(40000, Number(s.wiBudget) || 15000))); // 총 캡 = 설정 슬라이더(기본 15000자). 인물 많으면 인물당 자동 압축돼 총량은 이 안에서 유지
+    var world = _kpWIAll(); // 체크한 항목 중 연락처 인물·핵심 설정을 최대 토큰 안에서 통째로
     if (!world) { var cardAll = _charCardText(''); if (cardAll) world = String(cardAll).slice(0, 8000); }
     if (world) out += '## WORLD INFO (full setting & cast — ground truth; keep everyone consistent, do NOT invent unrelated lore/genre)\n' + world.trim() + '\n\n';
   }
@@ -4572,41 +4564,210 @@ function _kpBoundWorldNames() {
   } catch (e) {}
   return names.filter(function (v, i) { return v && names.indexOf(v) === i; });
 }
+// ── 월드인포 항목 선택(봇별) ─────────────────
+// extension_settings.kkang_phone.wiPick[봇키] = { book, uids, maxTokens }
+//   book: 고른 로어북 이름('' = 사용 안 함, 없으면 연결된 첫 로어북)
+//   uids: 체크한 항목 uid 목록(null = 기본 선택 — 켜져 있고 주입깊이(@Depth)가 아닌 항목 전부)
+//   maxTokens: 고른 항목의 합계 한도(토큰)
+var _KP_WI_MAX_DEF = 4000;
+function _kpWIPickCfg() {
+  var store = _kpExtStore(); var key = _charKey();
+  if (!store || !key) return null;
+  if (!store.wiPick || typeof store.wiPick !== 'object') store.wiPick = {};
+  if (!store.wiPick[key] || typeof store.wiPick[key] !== 'object') store.wiPick[key] = { uids: null, maxTokens: _KP_WI_MAX_DEF };
+  var c = store.wiPick[key];
+  if (c.book === undefined) c.book = _kpBoundWorldNames()[0] || '';
+  return c;
+}
+function _kpWIMaxTokens(c) {
+  var n = Math.round(Number(c && c.maxTokens) || _KP_WI_MAX_DEF);
+  return Math.max(200, Math.min(40000, n));
+}
+// 기본 선택 규칙 — 켜져 있고, 주입깊이(@Depth, position 4 = 상태창·선택지 같은 지시문)가 아닌 항목
+function _kpWIDefaultPick(e) { return !!e && !e.disable && e.position !== 4; }
+function _kpWIIsPicked(c, e) {
+  if (!c || !Array.isArray(c.uids)) return _kpWIDefaultPick(e);
+  return c.uids.indexOf(String(e.uid)) >= 0;
+}
+// ST 월드인포 편집창과 같은 정렬(편집창 정렬 함수 재사용, 없으면 ST 기본 '우선순위' 순)
+var _kpStSortWI = null;
+try { import('/scripts/world-info.js').then(function (m) { _kpStSortWI = (m && m.sortWorldInfoEntries) || null; }).catch(function () {}); } catch (e) {}
+function _kpWISorted(book) {
+  var list = Object.keys((book && book.entries) || {}).map(function (k) { return book.entries[k]; }).filter(Boolean);
+  if (_kpStSortWI) { try { return _kpStSortWI(list.slice()); } catch (e) {} }
+  function rank(e) { return e.disable ? 2 : (e.constant ? 0 : 1); }
+  return list.sort(function (a, b) { return rank(a) - rank(b) || (b.order || 0) - (a.order || 0) || (a.uid || 0) - (b.uid || 0); });
+}
+async function _kpCountTokens(text) {
+  var ctx = _getCtx();
+  try { if (ctx && typeof ctx.getTokenCountAsync === 'function') return await ctx.getTokenCountAsync(String(text || '')); } catch (e) {}
+  return Math.ceil(String(text || '').length / 3);
+}
+function _kpWIEntryLabel(e) {
+  var c = String(e.comment || '').trim(); if (c) return c;
+  if (Array.isArray(e.key) && e.key.length) return e.key.join(', ');
+  var t = String(e.content || '').replace(/\s+/g, ' ').trim();
+  return t ? t.slice(0, 30) : ('#' + e.uid);
+}
+// 전체 로어북 이름 목록(신버전 ST는 getWorldInfoNames, 구버전은 월드인포 셀렉트 DOM)
+function _kpAllWorldNames() {
+  var ctx = _getCtx();
+  try { if (ctx && typeof ctx.getWorldInfoNames === 'function') return ctx.getWorldInfoNames() || []; } catch (e) {}
+  var seen = [];
+  try {
+    document.querySelectorAll('#world_info option, #world_editor_select option').forEach(function (o) {
+      var n = (o.textContent || '').trim();
+      if (n && !/^---/.test(n) && seen.indexOf(n) < 0) seen.push(n);
+    });
+  } catch (e) {}
+  return seen;
+}
+// 체크한 항목을 편집창 순서대로 캐시에 적재(토큰 수 포함). 생성 함수들은 동기라 미리 읽어 둔다.
 async function _kpLoadWICache() {
   try {
     var ctx = _getCtx(); if (!ctx || typeof ctx.loadWorldInfo !== 'function') return;
-    var names = _kpBoundWorldNames();
-    var key = names.join('|') + '@' + (ctx.characterId != null ? ctx.characterId : (ctx.groupId || ''));
-    if (key === _kpWICache.key || _kpWICache.loading) return;
+    var c = _kpWIPickCfg();
+    var bookName = (c && c.book) || '';
+    var key = (_charKey() || '') + '|' + bookName + '|' + (c && Array.isArray(c.uids) ? c.uids.join(',') : '*');
+    if (_kpWICache.loading) { _kpWICache.again = true; return; }
+    if (key === _kpWICache.key) return;
     _kpWICache.loading = true;
-    var entries = [], depthSkip = 0;
-    for (var i = 0; i < names.length; i++) {
+    var entries = [];
+    if (bookName) {
       try {
-        var data = await ctx.loadWorldInfo(names[i]);
-        if (data && data.entries) {
-          Object.keys(data.entries).forEach(function (k) {
-            var e = data.entries[k];
-            if (!e || e.disable) return;
-            // 주입깊이(@Depth, ST position=4) 엔트리는 대개 상태창·선택지·변수 같은 시스템/AI 지시문이라 폰 생성엔 불필요 → 제외.
-            // 세계관·인물 로어는 보통 캐릭터 정의 앞/뒤(position 0/1)에 둔다. (플레이 중 폰 켤 때마다 지시문 끄기 번거로움 해소)
-            if (e.position === 4) { depthSkip++; return; }
-            var content = e.content ? String(e.content) : '';
-            if (!content.trim()) return;
-            var keys = (Array.isArray(e.key) ? e.key.slice() : []);
-            if (Array.isArray(e.keysecondary)) keys = keys.concat(e.keysecondary);
-            entries.push({ keys: keys, comment: e.comment || '', content: content, order: (typeof e.order === 'number' ? e.order : 100), constant: !!e.constant });
-          });
+        var data = await ctx.loadWorldInfo(bookName);
+        var sorted = _kpWISorted(data);
+        for (var i = 0; i < sorted.length; i++) {
+          var e = sorted[i];
+          if (!_kpWIIsPicked(c, e)) continue;
+          var content = e.content ? String(e.content) : '';
+          if (!content.trim()) continue;
+          if (typeof ctx.substituteParams === 'function') { try { content = ctx.substituteParams(content); } catch (e3) {} }
+          var keys = (Array.isArray(e.key) ? e.key.slice() : []);
+          if (Array.isArray(e.keysecondary)) keys = keys.concat(e.keysecondary);
+          entries.push({ uid: String(e.uid), keys: keys, comment: e.comment || '', content: content, constant: !!e.constant, tokens: await _kpCountTokens(content) });
         }
       } catch (e2) {}
     }
     _kpWICache.key = key;
     _kpWICache.entries = entries;
-    // ⚠️ 이 로그는 "어떤 월드인포가 채팅에 붙어있나"를 캐시에 미리 읽어둔 것일 뿐, 이번 생성에 주입했다는 뜻이 아니다.
-    // 캐시 적재는 채팅 바뀔 때마다 돌아 🐞 화면을 도배했음(유저 제보) → 콘솔에만 남기고 화면 버퍼엔 안 쌓는다.
-    // 실제 '참조/주입'(생성 시 끼워넣음)만 화면에 남긴다(_kpWIEntriesForName·_kpWIAll의 'WI' 로그).
-    var _wiOn = ((phoneData && phoneData.settings && phoneData.settings.useWorldInfo) === true);
-    try { console.warn('[Phone:WI] 캐시 적재: 월드 ' + names.length + '개(' + names.join(', ').slice(0, 70) + '), 엔트리 ' + entries.length + '개' + (depthSkip ? '(+주입깊이 ' + depthSkip + '개 제외)' : '') + ' · 참조 ' + (_wiOn ? 'ON → 생성 시 주입' : 'OFF → 주입 안 함')); } catch (e3) {}
-  } catch (e) {} finally { _kpWICache.loading = false; }
+    try { console.warn('[Phone:WI] 캐시 적재: ' + (bookName || '로어북 없음') + ' · 선택 항목 ' + entries.length + '개'); } catch (e4) {}
+  } catch (e) {} finally {
+    _kpWICache.loading = false;
+    if (_kpWICache.again) { _kpWICache.again = false; _kpLoadWICache(); }
+  }
+}
+// 선택이 바뀌면 캐시를 버리고 다시 적재
+function _kpWIInvalidate() { _kpWICache.key = ''; _kpLoadWICache(); }
+
+// ── 설정 화면: 로어북·항목 선택기 ─────────────────
+var _kpWIView = { entries: [], tokens: {}, open: false };
+function _kpWIMetaText(c) {
+  var ents = _kpWIView.entries;
+  var chosen = ents.filter(function (e) { return _kpWIIsPicked(c, e); });
+  var total = chosen.reduce(function (n, e) { return n + (_kpWIView.tokens[String(e.uid)] || 0); }, 0);
+  var mx = _kpWIMaxTokens(c);
+  return {
+    summary: '항목 목록 · ' + ents.length + '개 중 ' + chosen.length + '개 선택',
+    meta: '<b>' + chosen.length + '개 선택 · ' + total.toLocaleString() + ' 토큰</b>' +
+      (total > mx ? ' · 최대 ' + mx.toLocaleString() + ' 토큰을 넘어서 뒤쪽 항목은 빠져요' : ' / 최대 ' + mx.toLocaleString())
+  };
+}
+function _kpWIUpdateMeta() {
+  var c = _kpWIPickCfg(); if (!c) return;
+  var m = _kpWIMetaText(c);
+  var s = _kpEl('kp-wi-sum'); if (s) s.textContent = m.summary;
+  var d = _kpEl('kp-wi-meta'); if (d) d.innerHTML = m.meta;
+  _kpForcePaint();
+}
+async function _kpDrawWIPicker() {
+  var box = _kpEl('kp-wi-picker'); if (!box) return;
+  var c = _kpWIPickCfg();
+  if (!c) { box.innerHTML = '<div class="settings-desc">봇을 연 상태에서 설정할 수 있어요.</div>'; _kpForcePaint(); return; }
+  var ctx = _getCtx();
+  var linked = _kpBoundWorldNames();
+  var all = _kpAllWorldNames();
+  var books = linked.concat(all.filter(function (n) { return linked.indexOf(n) < 0; }));
+  var opts = '<option value=""' + (c.book ? '' : ' selected') + '>사용 안 함</option>' + books.map(function (n) {
+    return '<option value="' + escapeHtml(n) + '"' + (n === c.book ? ' selected' : '') + '>' + escapeHtml(n) + (linked.indexOf(n) >= 0 ? ' (연결됨)' : '') + '</option>';
+  }).join('');
+  var head = '<div class="kp-wi-head"><i class="fas fa-book"></i> 월드인포 · ' + escapeHtml((ctx && ctx.name2) || '이 봇') + '</div>' +
+    '<select class="modal-input kp-wi-sel" onchange="kpWIPickBook(this.value)">' + opts + '</select>';
+  if (!c.book) {
+    _kpWIView.entries = []; _kpWIView.tokens = {};
+    box.innerHTML = head + '<div class="settings-desc">로어북을 고르면 항목 목록이 나와요.</div>';
+    _kpForcePaint(); return;
+  }
+  var bookName = c.book;
+  box.innerHTML = head + '<div class="settings-desc">항목 불러오는 중…</div>';
+  _kpForcePaint();
+  var entries = [];
+  try { entries = _kpWISorted(await ctx.loadWorldInfo(bookName)); } catch (e) {}
+  var tokens = {};
+  await Promise.all(entries.map(async function (e) { tokens[String(e.uid)] = await _kpCountTokens(e.content); }));
+  if (bookName !== (_kpWIPickCfg() || {}).book) return; // 불러오는 사이 다른 로어북을 골랐으면 버림
+  box = _kpEl('kp-wi-picker'); if (!box) return;
+  _kpWIView.entries = entries; _kpWIView.tokens = tokens;
+  var rows = entries.map(function (e) {
+    var uid = escapeHtml(String(e.uid));
+    var tag = (e.disable ? '꺼짐 · ' : '') + (e.position === 4 ? '@D · ' : '');
+    return '<label class="kp-wi-row' + (e.disable ? ' off' : '') + '">' +
+      '<input type="checkbox" data-uid="' + uid + '"' + (_kpWIIsPicked(c, e) ? ' checked' : '') + ' onchange="kpWIPickToggle(this.getAttribute(\'data-uid\'),this.checked)">' +
+      '<span class="kp-wi-name">' + escapeHtml(_kpWIEntryLabel(e)) + '</span>' +
+      '<span class="kp-wi-size">' + tag + (tokens[String(e.uid)] || 0).toLocaleString() + ' 토큰</span></label>';
+  }).join('');
+  var m = _kpWIMetaText(c);
+  box.innerHTML = head +
+    '<details class="kp-wi-details"' + (_kpWIView.open ? ' open' : '') + ' ontoggle="kpWIListToggle(this.open)">' +
+      '<summary><i class="fas fa-list-check"></i> <span id="kp-wi-sum">' + m.summary + '</span><i class="fas fa-chevron-down kp-wi-chev"></i></summary>' +
+      (entries.length
+        ? '<div class="kp-wi-tools"><button onclick="kpWIPickAll(true)"><i class="fas fa-square-check"></i> 전체 선택</button><button onclick="kpWIPickAll(false)"><i class="fas fa-square"></i> 전체 해제</button></div>' +
+          '<div class="kp-wi-list">' + rows + '</div>'
+        : '<div class="settings-desc" style="padding:10px">항목이 없는 로어북이에요.</div>') +
+    '</details>' +
+    '<div class="settings-desc" id="kp-wi-meta">' + m.meta + '</div>' +
+    '<div class="settings-desc">이 봇에만 저장돼요. <b>@D</b> = 주입깊이 항목(상태창·선택지 같은 지시문이 많아 기본 제외).</div>';
+  _kpForcePaint();
+}
+function kpWIListToggle(open) { _kpWIView.open = !!open; _kpForcePaint(); }
+function kpWIPickBook(name) {
+  var c = _kpWIPickCfg(); if (!c) return;
+  c.book = String(name || '');
+  c.uids = null; // 로어북을 바꾸면 기본 선택부터
+  _saveExtSettings();
+  _kpWIInvalidate();
+  _kpDrawWIPicker();
+}
+// 기본 선택(uids=null) 상태에서 처음 손대면 현재 기본 선택을 실제 목록으로 고정
+function _kpWIMaterialize(c) {
+  if (!Array.isArray(c.uids)) c.uids = _kpWIView.entries.filter(_kpWIDefaultPick).map(function (e) { return String(e.uid); });
+}
+function kpWIPickToggle(uid, on) {
+  var c = _kpWIPickCfg(); if (!c) return;
+  _kpWIMaterialize(c);
+  uid = String(uid);
+  var i = c.uids.indexOf(uid);
+  if (on && i < 0) c.uids.push(uid);
+  if (!on && i >= 0) c.uids.splice(i, 1);
+  _saveExtSettings();
+  _kpWIInvalidate();
+  _kpWIUpdateMeta();
+}
+function kpWIPickAll(on) {
+  var c = _kpWIPickCfg(); if (!c) return;
+  c.uids = on ? _kpWIView.entries.map(function (e) { return String(e.uid); }) : [];
+  _saveExtSettings();
+  _kpWIInvalidate();
+  var box = _kpEl('kp-wi-picker');
+  if (box) box.querySelectorAll('.kp-wi-row input').forEach(function (b) { b.checked = !!on; });
+  _kpWIUpdateMeta();
+}
+function kpWISetMax(v) {
+  var c = _kpWIPickCfg(); if (!c) return;
+  c.maxTokens = _kpWIMaxTokens({ maxTokens: v });
+  _saveExtSettings();
+  var inp = _kpEl('kp-wi-max'); if (inp) inp.value = c.maxTokens;
+  _kpWIUpdateMeta();
 }
 // 캐릭터 시트에서 '문자 말투'에 중요한 부분(말투·성격) 우선으로 재배열해 발췌 — 앞 N자 자르면 게임스탯에
 // 밀려 Accent/Personality가 통째로 잘려나감(실사례). 섹션 단위로 말투>정체성>나머지 순 정렬.
@@ -4662,59 +4823,40 @@ function _kpWIPersona(name, maxLen) {
   var hits = _kpWIEntriesForName(name); if (!hits.length) return '';
   return _kpPersonaExcerpt(hits.join('\n'), maxLen || 2400);
 }
-// 월드인포 '전체' 합본(이름 필터 없이) — SNS 피드 등 특정 이름에 안 묶이는 생성용. 코멘트(엔트리
-// 제목)로 구획해 모델이 귀속하기 쉽게.
-// ⚠️ '엔트리 통째' → '엔트리별 캡 발췌'로 교체. 다인봇은 보통 엔트리 1개 = 인물 1명 풀시트라,
-//    옛 방식은 1순위 인물 한 명이 8000자 캡을 다 먹고 나머지가 통째 스킵됐다(실측 1/6엔트리). 해법:
-//    · 정렬 = constant(파란불=핵심 세계설정) 먼저 → order 오름차순.
-//    · 엔트리별 몫 per = 총량/엔트리수(500~1600자)로 '한 명 독식' 차단 → 전원 포함.
-//    · 파란불(constant) = 핵심이라 (거의)전체(maxLen*0.5까지), 초록불(selective) = _kpPersonaExcerpt로
-//      성격·외형 섹션 우선 발췌해 per까지(파란불=거의 전체, 초록불=성격·외형 위주 발췌).
-//    · 그래도 총 캡 넘으면 뒤(저우선) 엔트리만 통째 스킵(반토막 금지). 빠진 수는 🐞 로그에.
-function _kpWIAll(maxLen) {
+// 월드인포 합본(이름 필터 없이) — SNS 피드 등 특정 이름에 안 묶이는 생성용.
+// 설정에서 체크한 항목을 편집창 순서대로 통째로 넣고, 최대 토큰을 넘는 항목은 건너뛴다.
+// 코멘트(항목 제목)로 구획해 모델이 귀속하기 쉽게 한다.
+function _kpWIAll() {
   try {
     var s = (typeof phoneData !== 'undefined' && phoneData && phoneData.settings) || {};
     if (s.useWorldInfo !== true) return ''; // 명시적 ON일 때만(undefined·false = OFF)
     _kpLoadWICache();
     var ents = _kpWICache.entries; if (!ents || !ents.length) return '';
-    // 연락처 필터: 연락처에 추가된 인물의 엔트리 + 핵심 로어(constant)만 주입. 인물 엔트리가 많아도 추가한 인물만 인식.
+    // 연락처 필터: 연락처에 추가된 인물의 항목 + 핵심 로어(constant)만 주입.
     // 연락처가 하나도 없으면 미적용(전체) — 빈 연락처로 세계관이 통째 빠지는 것 방지.
     var _cts = (phoneData.contacts || []).map(_kpNorm).filter(function (n) { return n && n.length >= 2; });
     var _preN = ents.length;
     if (_cts.length) {
       ents = ents.filter(function (e) {
         if (e.constant) return true; // 항상 활성 = 핵심 세계설정/로어 → 인물 무관하게 유지
-        return (e.keys || []).concat([e.comment]).some(function (k) { // 엔트리 키워드·제목(정체)로 매칭(본문 제외 — 남 본문에 이름만 스친 것 배제)
+        return (e.keys || []).concat([e.comment]).some(function (k) { // 항목 키워드·제목으로 매칭(본문 제외 — 남 본문에 이름만 스친 것 배제)
           var kk = _kpNorm(k); if (!kk) return false;
           return _cts.some(function (nc) { return kk === nc || kk.indexOf(nc) >= 0 || nc.indexOf(kk) >= 0; });
         });
       });
-      if (!ents.length) return ''; // 매칭 0 → 주입 없음(연락처 인물 엔트리가 WI에 없음)
+      if (!ents.length) return ''; // 매칭 0 → 주입 없음
     }
-    maxLen = maxLen || 15000;
-    var sorted = ents.slice().sort(function (a, b) {
-      if (!!b.constant !== !!a.constant) return b.constant ? 1 : -1;               // constant(파란불) 먼저
-      return (a.order == null ? 100 : a.order) - (b.order == null ? 100 : b.order); // order 오름차순
-    });
-    var per = Math.max(600, Math.min(2400, Math.floor((maxLen - sorted.length * 24) / sorted.length))); // 엔트리 1개 몫(코멘트·구분자 여유 24자/개 차감 → 전원 포함 보장)
-    var out = '', used = 0, dropped = 0;
-    for (var i = 0; i < sorted.length; i++) {
-      var e = sorted[i], body, cap;
-      if (e.constant) { body = e.content; cap = Math.floor(maxLen * 0.5); }        // 파란불 = (거의)전체
-      else { body = _kpPersonaExcerpt(e.content, per); cap = per; }                // 초록불 = 성격·외형 발췌
-      if (body.length > cap) body = body.slice(0, cap);
-      var seg = (e.comment ? '[' + e.comment + '] ' : '') + body;
-      var add = (out ? '\n\n' : '') + seg;
-      if (out.length + add.length > maxLen) {                       // 총 캡 초과
-        if (!out) { out = seg.slice(0, maxLen); used = 1; }         // 첫 엔트리가 혼자 초과 → 잘라서라도(빈결과 방지)
-        else dropped++;                                            // 그 외엔 통째 스킵(반토막 금지)
-        continue;
-      }
-      out += add; used++;
+    var budget = _kpWIMaxTokens(_kpWIPickCfg());
+    var parts = [], used = 0, dropped = 0;
+    for (var i = 0; i < ents.length; i++) {
+      var e = ents[i];
+      if (used + (e.tokens || 0) > budget) { dropped++; continue; }
+      used += (e.tokens || 0);
+      parts.push((e.comment ? '[' + e.comment + '] ' : '') + e.content.trim());
     }
-    var _flt = (_cts.length && sorted.length < _preN) ? ' [연락처 ' + _cts.length + '명 필터: ' + sorted.length + '/' + _preN + '엔트리]' : '';
-    try { _kpLog('WI', '주입: ' + used + '/' + sorted.length + '엔트리(초록불 ~' + per + '자 발췌) → ' + out.length + '자' + (dropped ? ' (' + dropped + '개 스킵)' : '') + _flt); } catch (e2) {}
-    return out;
+    var _flt = (_cts.length && ents.length < _preN) ? ' [연락처 ' + _cts.length + '명 필터: ' + ents.length + '/' + _preN + '항목]' : '';
+    try { _kpLog('WI', '주입: ' + parts.length + '/' + ents.length + '항목 → ' + used.toLocaleString() + '/' + budget.toLocaleString() + '토큰' + (dropped ? ' (' + dropped + '개 한도 초과로 빠짐)' : '') + _flt); } catch (e2) {}
+    return parts.join('\n\n');
   } catch (e) { return ''; }
 }
 // ── 통화 키워드 트리거 ─────────────────────
@@ -5908,6 +6050,9 @@ var MAX_RETRIES = 2;
 // DM 답변 생성 시 프롬프트에 넣을 최근 대화 줄 수 상한(토큰 절약).
 // MSG_LIMIT(9999)은 '저장' 한도일 뿐 — 매 호출에 전체 스레드를 보내면 토큰이 무제한으로 샌다.
 var DM_CTX_LINES = 30;
+// 기억량 설정값(봇별 phoneData.settings) — 범위 밖·빈 값이면 기본값. 문자·통화 기억량은 문자 답장과 통화 양쪽에 같이 쓰인다.
+function _kpDmMemory() { var n = Math.round(Number(phoneData.settings && phoneData.settings.dmMemory)); return (n >= 5 && n <= 100) ? n : DM_CTX_LINES; }
+function _kpCallMemory() { var n = Math.round(Number(phoneData.settings && phoneData.settings.callMemory)); return (n >= 0 && n <= 5) ? n : 1; }
 
 function isNarrativeContamination(text) {
   if (!text || text === '...') return false;
@@ -6053,7 +6198,7 @@ async function sendAllPending(name) {
   showDmTyping(name);
 
   var conv = ensureConv(name);
-  var recent = conv.messages.slice(-DM_CTX_LINES).map(function(m) {
+  var recent = conv.messages.slice(-_kpDmMemory()).map(function(m) {
     var sender = m.from === 'user' ? 'User' : name;
     return sender + ': ' + m.text;
   }).join('\n');
@@ -6076,7 +6221,7 @@ async function sendAllPending(name) {
     name + "'s DM reply. Short, natural, like real texting. Plain text, [sticker:ID], and [Call] (to initiate a phone call to User) only.\n" +
     '\u2705 You DO remember recent phone calls with ' + name + ' (shown below if any) \u2014 reference what was actually said when relevant, just like a real person would after a call. But do NOT recite/paste the call transcript word-for-word.\n\n';
 
-  var callCtx = _kpRecentCallCtx(name, 1, 9999); // 이 사람과의 최근 통화 1통 전체 — 문자할 때도 기억(메신저↔통화 교차 인지)
+  var callCtx = _kpCallMemory() ? _kpRecentCallCtx(name, _kpCallMemory(), 9999) : ''; // 이 사람과의 최근 통화(기억량 설정, 기본 1통) — 문자할 때도 기억(메신저↔통화 교차 인지)
   var prompt;
   prompt = header +
       (callCtx ? 'Recent phone call with ' + name + ' (context only — reference naturally, do NOT recite verbatim):\n' + callCtx + '\n\n' : '') +
@@ -6169,14 +6314,14 @@ async function sendCallMsg(name, text) {
   var ctx = callMessages.map(function(m) {
     return (m.from === 'user' ? 'User' : name) + ': ' + m.text;
   }).join('\n');
-  var dmCtx = _kpRecentDmCtx(name, 20); // \ud3f0 \uc548\uc5d0\uc11c \uc774 \uc0ac\ub78c\uacfc \uc8fc\uace0\ubc1b\uc740 \ucd5c\uadfc \ubb38\uc790 \u2014 \ud1b5\ud654 \uc911\uc5d0\ub3c4 \uae30\uc5b5\ud574\uc57c \uc790\uc5f0\uc2a4\ub7ec\uc6c0
-  var prevCallCtx = _kpRecentCallCtx(name, 1, 9999); // \uc9c1\uc804 \ud1b5\ud654 1\ud1b5 \u2014 callLog\ub294 \ud1b5\ud654 \uc885\ub8cc \ud6c4 \uc313\uc774\ubbc0\ub85c \ud604\uc7ac \ud1b5\ud654\uc640 \uc548 \uacb9\uce68(\ud1b5\ud654\u2194\ud1b5\ud654 \uad50\ucc28 \uc778\uc9c0)
+  var dmCtx = _kpRecentDmCtx(name, _kpDmMemory()); // \ud3f0 \uc548\uc5d0\uc11c \uc774 \uc0ac\ub78c\uacfc \uc8fc\uace0\ubc1b\uc740 \ucd5c\uadfc \ubb38\uc790 \u2014 \ud1b5\ud654 \uc911\uc5d0\ub3c4 \uae30\uc5b5\ud574\uc57c \uc790\uc5f0\uc2a4\ub7ec\uc6c0
+  var prevCallCtx = _kpCallMemory() ? _kpRecentCallCtx(name, _kpCallMemory(), 9999) : ''; // \uc9c1\uc804 \ud1b5\ud654 1\ud1b5 \u2014 callLog\ub294 \ud1b5\ud654 \uc885\ub8cc \ud6c4 \uc313\uc774\ubbc0\ub85c \ud604\uc7ac \ud1b5\ud654\uc640 \uc548 \uacb9\uce68(\ud1b5\ud654\u2194\ud1b5\ud654 \uad50\ucc28 \uc778\uc9c0)
 
   var prompt = buildOverrideHeader(name, 'CALL') +
     '\u2705 OUTPUT ONLY:\n' +
     name + "'s phone call dialogue. Natural spoken reply, can be 1-3 sentences.\n" +
     'If ' + name + " wants to hang up, end with [hangup] tag.\n\n" +
-    (prevCallCtx ? 'Your previous phone call with User on this phone \u2014 you both remember it (reference naturally, do NOT recite verbatim):\n' + prevCallCtx + '\n\n' : '') +
+    (prevCallCtx ? 'Your previous phone call(s) with User on this phone \u2014 you both remember it (reference naturally, do NOT recite verbatim):\n' + prevCallCtx + '\n\n' : '') +
     (dmCtx ? 'Recent text messages (DM) you two exchanged on this phone \u2014 you both remember these:\n' + dmCtx + '\n\n' : '') +
     'Call transcript:\n' + ctx +
     '\n\nOutput ' + name + "'s spoken reply only. NO tags/prose/variables/special chars. Add [hangup] ONLY if ending call.\n\n" +
@@ -12000,6 +12145,7 @@ async function _commGenComments(app, post) {
       'USER POST — board: "' + _commBoardLabel(app, post.board) + '", title: "' + (post.title || '') + '", body: "' + (post.content || '') + '"\n' +
       (cfg.commentAnchor ? _commStr(cfg.commentAnchor) : '\n## WORLD ANCHOR: only use the world/people that appear in the current conversation; never invent unrelated franchises. Commenters only know publicly-observable info, never the user\'s private secrets.\n') +
       '## Comments are SHORT, casual, reactive (agreeing, joking, arguing, advice, teasing). Anonymous authors: just put "' + (cfg.anon || '익명') + '" as the name (the app numbers them); do NOT reference others by a number.\n' +
+      _worldModeLine() + // 독자 모드면 댓글도 독자 시점(세계관 이입이면 빈 문자열)
       'OUTPUT — return ONLY a raw JSON array, nothing else:\n' +
       '[{"name":"' + (cfg.anon || '익명') + '","text":"comment"}]\n' +
       'Produce 3 to 6 comments.\n[BEGIN JSON]\n';
@@ -12153,6 +12299,7 @@ async function _commGenReactions(app, postId, rootIdx, userText) {
       '- ★ Not everyone replies directly — some just drop a separate comment instead. Keep each SHORT.\n' +
       '- Anonymous authors: just put "' + (cfg.anon || '익명') + '" as the name (the app numbers them). Do NOT reference others by a number.\n' +
       (cfg.commentAnchor ? _commStr(cfg.commentAnchor) : '\n## WORLD/PUBLIC: only the world/people in the current conversation; commenters only know public info, never the user\'s private secrets.\n') +
+      _worldModeLine() + // 독자 모드면 댓글도 독자 시점(세계관 이입이면 빈 문자열)
       'OUTPUT — return ONLY a raw JSON array, nothing else:\n' +
       '[{"kind":"reply","name":"' + (cfg.anon || '익명') + '","text":"..."},{"kind":"comment","name":"' + (cfg.anon || '익명') + '","text":"..."}]\n' +
       'Produce 1 to 4 reactions.\n[BEGIN JSON]\n';
@@ -12549,7 +12696,12 @@ function _kkangPhoneInit() {
   if (typeof toggleCharScope !== 'undefined') window.toggleCharScope = toggleCharScope;
   if (typeof _applyCharScope !== 'undefined') window._applyCharScope = _applyCharScope;
   if (typeof setCtxMsgs !== 'undefined') window.setCtxMsgs = setCtxMsgs;
-  if (typeof setWiBudget !== 'undefined') window.setWiBudget = setWiBudget;
+  if (typeof kpWIListToggle !== 'undefined') window.kpWIListToggle = kpWIListToggle;
+  if (typeof kpWIPickBook !== 'undefined') window.kpWIPickBook = kpWIPickBook;
+  if (typeof kpWIPickToggle !== 'undefined') window.kpWIPickToggle = kpWIPickToggle;
+  if (typeof kpWIPickAll !== 'undefined') window.kpWIPickAll = kpWIPickAll;
+  if (typeof kpWISetMax !== 'undefined') window.kpWISetMax = kpWISetMax;
+  if (typeof setMemorySetting !== 'undefined') window.setMemorySetting = setMemorySetting;
   if (typeof setProbSetting !== 'undefined') window.setProbSetting = setProbSetting;
   if (typeof importPackFromPicker !== 'undefined') window.importPackFromPicker = importPackFromPicker;
   if (typeof openStickerPackManager !== 'undefined') window.openStickerPackManager = openStickerPackManager;
