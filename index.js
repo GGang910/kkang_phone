@@ -71,6 +71,11 @@
   //  'pipeline'= generateQuietPrompt(메인 파이프라인 통째 = 프리셋 지시문+풀채팅+WI 전부 전송, 비쌈)
   // 폰이 실제로 쓸 연결 프로필 id. 폰 전용 프로필이 지정돼 있으면 그것,
   // 없으면(=선택 안 함) ST 연결 관리자의 '현재 선택된 프로필'을 그대로 따라간다.
+  // 🧠 추론 최소화(기본 켜짐): 폰 요청에만 reasoning_effort='min'을 실어 보낸다(메인 채팅 설정은 그대로).
+  function _kpReasonOverride() {
+    var s = (typeof phoneData !== "undefined" && phoneData && phoneData.settings) || {};
+    return s.minReasoning === false ? {} : { reasoning_effort: "min" };
+  }
   function _kpEffectiveProfileId() {
     try {
       var s = (typeof phoneData !== "undefined" && phoneData && phoneData.settings) || {};
@@ -100,7 +105,7 @@
     if (transport === "profile") {
       try {
         const svc = ST.ConnectionManagerRequestService;
-        const res = await svc.sendRequest(_kpEffectiveProfileId(), prompt, 4096);
+        const res = await svc.sendRequest(_kpEffectiveProfileId(), prompt, 4096, undefined, _kpReasonOverride());
         if (res == null) return "";
         if (typeof res === "string") return res;
         if (typeof res.content === "string") return res.content;
@@ -114,8 +119,13 @@
     if (transport !== "pipeline" && ST && typeof ST.generateRaw === "function") {
       try {
         _kpArmRawGuard(String(prompt).trim().slice(0, 160), "");
-        const res = await ST.generateRaw({ prompt: prompt, quietToLoud: false, responseLength: 4096 });
-        return (typeof res === "string") ? res : String(res != null ? res : "");
+        var _cc = (_getCtx() || ST || {}).chatCompletionSettings, _prevRE;
+        var _ro = _kpReasonOverride();
+        if (_cc && _ro.reasoning_effort) { _prevRE = _cc.reasoning_effort; _cc.reasoning_effort = _ro.reasoning_effort; }
+        try {
+          const res = await ST.generateRaw({ prompt: prompt, quietToLoud: false, responseLength: 4096 });
+          return (typeof res === "string") ? res : String(res != null ? res : "");
+        } finally { if (_cc && _ro.reasoning_effort) _cc.reasoning_effort = _prevRE; }
       } catch (e) {
         console.warn("[kkang_phone] generateRaw 실패 — 파이프라인으로 폴백:", e);
       } finally { _kpDisarmRawGuard(); }
@@ -1741,7 +1751,9 @@ function _normalizePhoneData(data) {
   if (data.settings.twName === undefined) data.settings.twName = ''; // 트위터 표시 닉네임(비우면 페르소나 이름)
   if (data.settings.twHandle === undefined) data.settings.twHandle = ''; // 트위터 아이디(@, 비우면 @닉네임)
   if (data.settings.chatAware === undefined) data.settings.chatAware = true; // 격리 프로필일 때 현재 롤플레이 맥락을 압축 주입
-  if (data.settings.chatCtxMsgs === undefined) data.settings.chatCtxMsgs = 5; // 📜 채팅 인지량 기본 = 최신 5챗(유저 요청 — 토큰 절약). 옛 데이터도 미설정이면 5로
+  if (data.settings.chatCtxMsgs === undefined) data.settings.chatCtxMsgs = 3;
+  if (data.settings.minReasoning === undefined) data.settings.minReasoning = true; // 🧠 추론 최소화 기본 켜짐
+  if (data.settings.chatCtxMode !== 'full' && data.settings.chatCtxMode !== 'trim') data.settings.chatCtxMode = 'trim'; // 📜 읽는 방식 기본 = 잘라서 읽기 // 📜 채팅 인지량 기본 = 최신 5챗(유저 요청 — 토큰 절약). 옛 데이터도 미설정이면 5로
   if (data.settings.autopicLink === undefined) data.settings.autopicLink = false; // 오토픽(AutoPic) NAI 리스케일 연동
   if (data.settings.lightMode === undefined) data.settings.lightMode = true; // 경량 API 호출(generateRaw) — 메인 프리셋·풀채팅 미동봉
   if (data.settings.probChatContact === undefined) data.settings.probChatContact = 18; // 채팅 반응 연락 확률(%)
@@ -2642,6 +2654,344 @@ function rDMList(el) {
     '<div class="s-body">' + list + '</div>';
 }
 
+// ── 번역 버튼(유튜브식) ─────────────────
+// 외국어 메시지 아래 '번역 보기' → 누른 메시지만 번역해 그 자리 글자를 바꾼다. '원문 보기'로 되돌린다.
+// 번역문은 메시지에 _tr { lang, src, text }로 저장(같은 원문·언어면 다시 번역하지 않음).
+// 설정은 모든 봇 공통(globalCfg.trOn / trLang / trEngine / trProfileId / trModel / trPrompt).
+// 폰 AI 엔진은 앞뒤 채팅 없이 그 메시지 글자만 보낸다(번역 지시 + 추가 지시 + 원문).
+var _KP_TR_LANGS = {
+  ko: { label: '한국어', st: 'ko', name: 'Korean' },
+  en: { label: 'English', st: 'en', name: 'English' },
+  ja: { label: '日本語', st: 'ja', name: 'Japanese' },
+  zh: { label: '中文', st: 'zh-CN', name: 'Chinese (Simplified)' }
+};
+var _kpTrBusy = {}; // 번역 중인 메시지 키(kind|key|idx) — 저장 안 함
+function _kpTrCfg() {
+  var g = _kpGlobalCfg() || {};
+  return { on: g.trOn !== false, lang: _KP_TR_LANGS[g.trLang] ? g.trLang : 'ko', engine: g.trEngine === 'ai' ? 'ai' : 'st',
+    profileId: String(g.trProfileId || ''), prompt: String(g.trPrompt || ''), model: String(g.trModel || '') };
+}
+// 번역할 평문만 — [스티커·사진·답장 인용] 같은 태그는 빼고
+function _kpTrPlain(text) { return String(text || '').replace(/\[[^\]]*\]/g, ' ').replace(/[ \t]+/g, ' ').trim(); }
+// 글자 종류로 주 언어 판별('' = 판별 불가·너무 짧음)
+function _kpTrScript(s) {
+  s = String(s || '');
+  var h = (s.match(/[가-힣ㄱ-ㅎㅏ-ㅣ]/g) || []).length;
+  var k = (s.match(/[぀-ヿ]/g) || []).length;
+  var c = (s.match(/[一-鿿]/g) || []).length;
+  var l = (s.match(/[A-Za-z]/g) || []).length;
+  var tot = h + k + c + l;
+  if (tot < 2) return '';
+  if (h / tot >= 0.3) return 'ko';
+  if (k > 0 && (k + c) / tot >= 0.3) return 'ja';
+  if (c / tot >= 0.3) return 'zh';
+  if (l / tot >= 0.5) return 'en';
+  return '';
+}
+// 이 메시지에 '번역 보기'를 띄울지 — 읽을 언어와 다른 글자로 쓰였을 때만
+function _kpTrNeeded(text) {
+  var c = _kpTrCfg(); if (!c.on) return false;
+  var sc = _kpTrScript(_kpTrPlain(text));
+  return !!sc && sc !== c.lang;
+}
+// 원문 태그 순서는 그대로 두고, 평문 자리에 번역문을 넣는다
+function _kpTrCompose(text, tr) {
+  var segs = String(text || '').split(/(\[[^\]]*\])/);
+  var out = '', placed = false;
+  segs.forEach(function (s) {
+    if (/^\[[^\]]*\]$/.test(s)) { out += s; return; }
+    if (!s.trim()) { out += s; return; }
+    if (!placed) { out += (out && !/\s$/.test(out) ? ' ' : '') + tr; placed = true; }
+  });
+  if (!placed) out += tr;
+  return out;
+}
+// 행 렌더용: 화면에 보일 텍스트 + 번역 링크
+function _kpTrView(kind, key, idx, msg) {
+  var showTr = !!(!msg.deleted && msg._trOn && msg._tr && msg._tr.text && msg._tr.src === _kpTrPlain(msg.text)); // 수정된 메시지면 원문으로
+  var busy = !!_kpTrBusy[kind + '|' + key + '|' + idx];
+  var text = showTr ? _kpTrCompose(msg.text, msg._tr.text) : msg.text;
+  var link = '';
+  if (!msg.deleted && (showTr || busy || _kpTrNeeded(msg.text))) {
+    link = '<div class="msg-tr-link" onclick="event.stopPropagation();kpTrToggle(\'' + kind + '\',\'' + safeJs(key) + '\',' + idx + ')">' +
+      (busy ? '번역 중…' : (showTr ? '원문 보기' : '번역 보기')) + '</div>';
+  }
+  return { text: text, link: link };
+}
+async function _kpTranslate(text, c) {
+  var L = _KP_TR_LANGS[c.lang];
+  if (c.engine === 'st') {
+    if (typeof globalThis.translate !== 'function') { showToast('실리태번 번역 확장이 꺼져 있어요 (설정 > 세계관에서 폰 AI로 바꿀 수 있어요)', 'error'); return ''; }
+    var r = await globalThis.translate(text, L.st);
+    return String(r || '').trim();
+  }
+  var sys = 'You are a translator. Translate the user text into ' + L.name + '. Keep the tone, slang, emoji and line breaks. Output ONLY the translation, nothing else.' +
+    (c.prompt.trim() ? '\nExtra instructions: ' + c.prompt.trim() : '');
+  var mt = Math.max(2048, text.length * 4); // thinking 모델은 생각 토큰도 이 한도에서 빠지므로 넉넉히
+  return String((await _kpTrAICall(sys, text, mt)) || '').trim();
+}
+// 폰 AI 번역 호출 — 번역용 프로필 → 폰 전용 프로필 → 직통(cleanGen) 순
+async function _kpTrAICall(sys, text, mt) {
+  var c = _kpTrCfg(), out = null;
+  var pid = c.profileId || ((phoneData && phoneData.settings && phoneData.settings.phoneProfileId) || '');
+  var svc = ST && ST.ConnectionManagerRequestService;
+  if (pid && svc && typeof svc.sendRequest === 'function') {
+    try {
+      var res = await svc.sendRequest(pid, sys + '\n\n' + text, mt, undefined, Object.assign({}, _kpReasonOverride(), c.model ? { model: c.model } : {}));
+      out = (res == null) ? '' : (typeof res === 'string' ? res : String(res.content != null ? res.content : ''));
+    } catch (e) { _kpLog('번역', '프로필 호출 실패 → 직통: ' + (e && e.message || e)); }
+  }
+  if (!out) { try { out = await _kpCleanGen(sys, text, '', mt, null, c.model ? { model: c.model } : null); } catch (e) {} }
+  return out || '';
+}
+// ── SNS 번역(앱 상단 🌐 스위치) ─────────────────
+// 켜면 그 앱 화면의 외국어 글·댓글을 번역문으로 보여준다. 번역문은 글·댓글 객체에 _trf로 저장해
+// 이미 번역한 건 다시 안 하고, 화면에 새로 생긴 것만 한 번에 번역한다
+// (ST 번역 = 항목별 동시 요청, 폰 AI = 번호 매긴 배열로 한 번에). 스위치 상태는 봇별(settings.trView[앱], 기본 켜짐).
+var _kpTrFeedBusy = {};
+var _kpTrFailed = (typeof WeakMap === 'function') ? new WeakMap() : null; // 이번 세션에 실패한 항목(같은 원문은 재시도 안 함)
+// 번역 우선: 원문 보기(🌐 끔)를 누른 앱만 false, 그 외엔 번역문을 보여주고 새 외국어도 이어서 번역
+function _kpTrFeedOn(app) {
+  var v = phoneData && phoneData.settings && phoneData.settings.trView;
+  return !(v && v[app] === false) && _kpTrCfg().on;
+}
+function _kpTrViewSet(app, on) {
+  if (!phoneData.settings) phoneData.settings = {};
+  if (!phoneData.settings.trView || typeof phoneData.settings.trView !== 'object') phoneData.settings.trView = {};
+  phoneData.settings.trView[app] = !!on;
+  saveData();
+}
+// 번역문은 필드별로 obj._trf[필드] = { lang, src, text } (제목·본문처럼 한 객체에 여러 글이 있어도 안 겹침)
+function _kpTrGetF(obj, field) { return obj && obj._trf && obj._trf[field]; }
+function _kpTrValid(obj, field, c) {
+  var r = _kpTrGetF(obj, field);
+  return !!(r && r.lang === c.lang && r.text && r.src === _kpTrPlain(obj[field]));
+}
+// 화면에 보일 글자 — 스위치가 켜져 있고 번역이 있으면 번역문
+function _kpTrTxt(app, obj, field) {
+  field = field || 'content';
+  if (!obj) return '';
+  if (_kpTrFeedOn(app) && _kpTrValid(obj, field, _kpTrCfg())) return _kpTrCompose(obj[field], obj._trf[field].text);
+  return obj[field];
+}
+// 앱 헤더용 🌐 버튼(번역 버튼 설정이 꺼져 있으면 안 보임)
+function _kpTrFeedBtn(app) {
+  if (!_kpTrCfg().on) return '';
+  var on = _kpTrFeedOn(app), busy = !!_kpTrFeedBusy[app];
+  return '<button class="btn-icon kp-tr-btn' + (on ? ' on' : '') + '" onclick="kpTrFeedToggle(\'' + app + '\')" title="' + (on ? '원문 보기' : '번역 보기') + '">' +
+    '<i class="fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-language') + '"></i></button>' +
+    (on && !busy ? '<button class="btn-icon kp-tr-redo" onclick="kpTrFeedRedo(\'' + app + '\')" title="이 화면 다시 번역"><i class="fas fa-rotate-right"></i></button>' : '');
+}
+var _KP_TR_RENDER = {}; // 앱 → 화면 다시 그리기 함수(앱 렌더러 정의 뒤에 등록)
+function _kpTrRerender(app) {
+  if (currentScreen !== app || !_KP_TR_RENDER[app]) return;
+  var scr = _kpEl('screen'); if (!scr) return;
+  var keep = {};
+  ['.s-body', '.comm-scroll'].forEach(function (sel) { var n = scr.querySelector(sel); if (n) keep[sel] = n.scrollTop; });
+  var vals = {};
+  scr.querySelectorAll('input[id], textarea[id]').forEach(function (n) { if (n.value) vals[n.id] = n.value; });
+  _KP_TR_RENDER[app](scr);
+  Object.keys(keep).forEach(function (sel) { var n = scr.querySelector(sel); if (n) n.scrollTop = keep[sel]; });
+  Object.keys(vals).forEach(function (id) { var n = _kpEl(id); if (n && !n.value) n.value = vals[id]; });
+  _kpForcePaint();
+}
+// 🌐 = 번역 보기 ↔ 원문 보기
+function kpTrFeedToggle(app) { _kpTrFeedSwitch(app); }
+// ↻ = 지금 화면에 보이는 번역을 지우고 새로 번역
+function kpTrFeedRedo(app) {
+  if (_kpTrFeedBusy[app]) return;
+  (_kpTrLastItems[app] || []).forEach(function (it) { if (it && it.obj && it.obj._trf) delete it.obj._trf[it.field]; });
+  if (typeof WeakMap === 'function') _kpTrFailed = new WeakMap();
+  saveData();
+  _kpTrRerender(app);
+}
+function _kpTrFeedSwitch(app) {
+  var on = !_kpTrFeedOn(app);
+  _kpTrViewSet(app, on);
+  if (on && typeof WeakMap === 'function') _kpTrFailed = new WeakMap(); // 켤 때는 실패했던 항목도 다시 시도
+  _kpTrRerender(app); // 켜면 렌더 끝의 _kpTrFeedAuto가 빠진 것만 번역
+}
+// 렌더 끝에서 호출 — 화면에 보이는 항목 중 번역 안 된 외국어만 모아 번역
+var _kpTrLastItems = {}; // 앱별로 마지막에 화면에 보였던 항목(다시 번역용)
+function _kpTrFeedAuto(app, items) {
+  _kpTrLastItems[app] = items || [];
+  if (!_kpTrFeedOn(app) || _kpTrFeedBusy[app]) return;
+  var c = _kpTrCfg();
+  var need = (items || []).filter(function (it) {
+    var o = it && it.obj, f = it && it.field;
+    if (!o || !o[f] || _kpTrValid(o, f, c)) return false;
+    var src = _kpTrPlain(o[f]);
+    if (_kpTrFailed && _kpTrFailed.get(o) === c.engine + '|' + c.lang + '|' + f + '|' + src) return false;
+    var sc = _kpTrScript(src);
+    return !!sc && sc !== c.lang;
+  });
+  if (!need.length) return;
+  _kpTrFeedBusy[app] = true;
+  setTimeout(function () { _kpTrRerender(app); _kpTrFeedFill(app, need, c); }, 0);
+}
+async function _kpTrFeedFill(app, need, c) {
+  var srcs = need.map(function (it) { return _kpTrPlain(it.obj[it.field]); });
+  var outs = [];
+  try { outs = await _kpTranslateMany(srcs, c); } catch (e) { _kpLog('번역', app + ' 실패: ' + (e && e.message || e)); }
+  var ok = 0;
+  need.forEach(function (it, i) {
+    var tr = outs && outs[i] ? String(outs[i]).trim() : '';
+    if (tr) { if (!it.obj._trf || typeof it.obj._trf !== 'object') it.obj._trf = {}; it.obj._trf[it.field] = { lang: c.lang, src: srcs[i], text: tr }; ok++; }
+    else if (_kpTrFailed) _kpTrFailed.set(it.obj, c.engine + '|' + c.lang + '|' + it.field + '|' + srcs[i]);
+  });
+  if (ok) saveData();
+  _kpLog('번역', app + ' ' + (c.engine === 'st' ? 'ST 번역' : '폰 AI') + ' ' + ok + '/' + need.length + '개');
+  if (ok < need.length) showToast('번역 못 한 항목이 있어요 (' + (need.length - ok) + '개)', 'error');
+  delete _kpTrFeedBusy[app];
+  _kpTrRerender(app);
+}
+// 여러 글을 한 번에 — ST 번역은 4개씩 동시, 폰 AI는 JSON 배열로 1회 호출
+async function _kpTranslateMany(srcs, c) {
+  if (!srcs.length) return [];
+  var L = _KP_TR_LANGS[c.lang];
+  if (c.engine === 'st') {
+    if (typeof globalThis.translate !== 'function') { showToast('실리태번 번역 확장이 꺼져 있어요 (설정 > 세계관에서 폰 AI로 바꿀 수 있어요)', 'error'); return []; }
+    var outs = new Array(srcs.length), next = 0;
+    async function worker() {
+      while (next < srcs.length) {
+        var i = next++;
+        try { outs[i] = String((await globalThis.translate(srcs[i], L.st)) || '').trim(); } catch (e) { outs[i] = ''; }
+      }
+    }
+    var ws = []; for (var w = 0; w < Math.min(4, srcs.length); w++) ws.push(worker());
+    await Promise.all(ws);
+    return outs;
+  }
+  var sys = 'You are a translator. The user gives a JSON array of strings. Translate EACH string into ' + L.name + '. Keep the tone, slang, emoji and line breaks. ' +
+    'Return ONLY a JSON array of the translated strings — same length, same order, nothing else.' + (c.prompt.trim() ? '\nExtra instructions: ' + c.prompt.trim() : '');
+  var body = JSON.stringify(srcs);
+  var raw = await _kpTrAICall(sys, body, Math.max(2048, body.length * 4));
+  var s = String(raw || ''), a = s.indexOf('['), b = s.lastIndexOf(']');
+  if (a < 0 || b <= a) return [];
+  try { var arr = JSON.parse(s.slice(a, b + 1)); return Array.isArray(arr) ? arr.map(function (x) { return x == null ? '' : String(x); }) : []; }
+  catch (e) { return []; }
+}
+
+function _kpTrMsgs(kind, key) {
+  if (kind === 'dm') return (phoneData.conversations && phoneData.conversations[key] && phoneData.conversations[key].messages) || null;
+  return (phoneData.groupChats && phoneData.groupChats[key] && phoneData.groupChats[key].messages) || null;
+}
+// 그 메시지 행만 다시 그린다(스크롤 유지)
+function _kpTrRedraw(kind, key, idx) {
+  var here = kind === 'dm' ? (currentScreen === 'dm-chat' && currentContact === key) : (currentScreen === 'group-chat' && currentGroupId === key);
+  if (!here) return;
+  var row = _kpQ('#kkang_phone-root .msg-row[data-kpidx="' + idx + '"]'); if (!row) return;
+  var html = kind === 'dm' ? _dmMsgRowHtml(key, ensureConv(key), idx) : _groupMsgRowHtml(key, phoneData.groupChats[key], idx);
+  var tmp = document.createElement('div'); tmp.innerHTML = html;
+  if (tmp.firstElementChild) row.replaceWith(tmp.firstElementChild);
+  try { _kpApplyMaskDOM(); } catch (e) {}
+  _kpForcePaint();
+}
+// 문자 번역을 지우고 다시 번역
+function kpTrRedo(kind, key, idx) {
+  var list = _kpTrMsgs(kind, key); var msg = list && list[idx]; if (!msg) return;
+  delete msg._tr; msg._trOn = false;
+  kpTrToggle(kind, key, idx);
+}
+async function kpTrToggle(kind, key, idx) {
+  var list = _kpTrMsgs(kind, key); var msg = list && list[idx];
+  var bk = kind + '|' + key + '|' + idx;
+  if (!msg || _kpTrBusy[bk]) return;
+  if (msg._trOn) { msg._trOn = false; saveData(); _kpTrRedraw(kind, key, idx); return; }
+  var c = _kpTrCfg();
+  var src = _kpTrPlain(msg.text); if (!src) return;
+  if (msg._tr && msg._tr.lang === c.lang && msg._tr.src === src && msg._tr.text) { msg._trOn = true; saveData(); _kpTrRedraw(kind, key, idx); return; }
+  _kpTrBusy[bk] = true; _kpTrRedraw(kind, key, idx);
+  var out = '';
+  try { out = await _kpTranslate(src, c); } catch (e) { _kpLog('번역', '실패: ' + (e && e.message || e)); }
+  delete _kpTrBusy[bk];
+  if (out) { msg._tr = { lang: c.lang, src: src, text: out }; msg._trOn = true; saveData(); _kpLog('번역', (c.engine === 'st' ? 'ST 번역' : '폰 AI') + ' ' + src.length + '자 → ' + out.length + '자'); }
+  else showToast('번역에 실패했어요', 'error');
+  _kpTrRedraw(kind, key, idx);
+}
+// 설정(세계관 탭) — 번역 버튼 켜기·읽을 언어·엔진
+function kpTrSet(k, v) {
+  var g = _kpGlobalCfg(); if (!g) return;
+  if (k === 'on') g.trOn = !(g.trOn !== false);
+  else if (k === 'lang' && _KP_TR_LANGS[v]) g.trLang = v;
+  else if (k === 'engine') g.trEngine = (v === 'ai' ? 'ai' : 'st');
+  else if (k === 'profile') { g.trProfileId = String(v || ''); g.trModel = ''; }
+  else if (k === 'model') g.trModel = String(v || '');
+  else if (k === 'prompt') { g.trPrompt = String(v || ''); _saveExtSettings(); showToast('번역 추가 지시 저장됨'); return; }
+  _saveExtSettings();
+  try { _rSettingsKeep(); } catch (e) { rSettings(_kpEl('screen')); }
+}
+function _kpTrAiSettingsHtml(c) {
+  var opts = '<option value=""' + (c.profileId ? '' : ' selected') + '>폰 전용 프로필 그대로 (없으면 현재 연결)</option>';
+  try {
+    var profs = (ST && ST.extensionSettings && ST.extensionSettings.connectionManager && ST.extensionSettings.connectionManager.profiles) || [];
+    profs.forEach(function (p) {
+      if (!p || !p.id) return;
+      opts += '<option value="' + escapeHtml(p.id) + '"' + (p.id === c.profileId ? ' selected' : '') + '>' + escapeHtml(p.name || p.id) + '</option>';
+    });
+  } catch (e) {}
+  return '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">번역용 연결 프로필</div>' +
+    '<select class="modal-input" style="height:38px;font-size:13px;margin:0;width:100%" onchange="kpTrSet(\'profile\',this.value)">' + opts + '</select>' +
+    _kpTrModelHtml(c) +
+    '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">번역 추가 지시 (선택)</div>' +
+    '<textarea class="modal-textarea" style="margin:0;min-height:64px;font-size:12px;line-height:1.5" data-nomask="1" placeholder="예: 반말은 반말로, 이름은 번역하지 말 것" onchange="kpTrSet(\'prompt\',this.value)">' + escapeHtml(c.prompt) + '</textarea>';
+}
+// 번역 모델 — 고른 프로필과 같은 API의 모델 목록(ST 모델 선택칸)에서 고른다. 비우면 프로필 모델 그대로.
+function _kpTrProfile(c) {
+  var pid = c.profileId || ((phoneData && phoneData.settings && phoneData.settings.phoneProfileId) || '');
+  try {
+    var cm = ST && ST.extensionSettings && ST.extensionSettings.connectionManager;
+    if (!pid && cm) pid = cm.selectedProfile || '';
+    return ((cm && cm.profiles) || []).find(function (p) { return p && p.id === pid; }) || null;
+  } catch (e) { return null; }
+}
+function _kpTrModelHtml(c) {
+  var prof = _kpTrProfile(c);
+  if (!prof || !prof.api) return '';
+  var api = String(prof.api);
+  var sel = _kpDocQ((api === 'google' || api === 'makersuite') ? '#model_google_select' : ('#model_' + api + '_select'));
+  var models = [];
+  if (sel && sel.options) {
+    for (var i = 0; i < sel.options.length; i++) {
+      var v = sel.options[i].value;
+      if (v && models.indexOf(v) < 0) models.push(v);
+    }
+  }
+  var custom = (c.model && models.indexOf(c.model) < 0) ? c.model : ''; // 목록에 없는 직접 입력 모델
+  var head = '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">번역 모델 (' + escapeHtml(api) + ')</div>';
+  if (!models.length) {
+    return head + '<input type="text" class="modal-input" style="height:38px;font-size:13px;margin:0" placeholder="비우면 프로필 모델(' + escapeHtml(prof.model || '') + ')" value="' + escapeHtml(c.model) + '" onchange="kpTrSet(\'model\',this.value.trim())">';
+  }
+  var opts = '<option value=""' + (c.model ? '' : ' selected') + '>프로필 모델 그대로 (' + escapeHtml(prof.model || '?') + ')</option>' +
+    (custom ? '<option value="' + escapeHtml(custom) + '" selected>✏️ 직접 입력: ' + escapeHtml(custom) + '</option>' : '') +
+    models.map(function (m) { return '<option value="' + escapeHtml(m) + '"' + (m === c.model ? ' selected' : '') + '>' + escapeHtml(m) + '</option>'; }).join('');
+  return head + '<select class="modal-input" style="height:38px;font-size:13px;margin:0;width:100%" onchange="kpTrSet(\'model\',this.value)">' + opts + '</select>' +
+    '<input type="text" class="modal-input" style="height:36px;font-size:12.5px;margin:0" placeholder="목록에 없으면 모델 이름 직접 입력 (예: gemini-3.1-flash)" value="' + escapeHtml(custom) + '" onchange="kpTrSet(\'model\',this.value.trim())">';
+}
+function _kpTrSettingsHtml() {
+  var c = _kpTrCfg();
+  var html = '<div class="settings-item"><div><div class="settings-label">🔤 번역 버튼</div><div class="settings-desc">외국어 메시지 아래 <b>번역 보기</b>가 떠요. 누른 메시지만 번역하고, 한 번 번역한 건 저장돼요. (모든 봇 공통)</div></div>' +
+    '<div class="toggle ' + (c.on ? 'on' : '') + '" onclick="kpTrSet(\'on\')"></div></div>';
+  if (!c.on) return html;
+  var langBtns = Object.keys(_KP_TR_LANGS).map(function (k) {
+    return '<button class="locale-btn' + (c.lang === k ? ' on' : '') + '" onclick="kpTrSet(\'lang\',\'' + k + '\')">' + _KP_TR_LANGS[k].label + '</button>';
+  }).join('');
+  return html +
+    '<div class="settings-item kp-sub" style="flex-direction:column;align-items:stretch;gap:8px">' +
+      '<div style="font-size:11px;color:var(--text-sec);font-weight:600">읽을 언어 (이 언어로 번역)</div>' +
+      '<div class="locale-grid">' + langBtns + '</div>' +
+      '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">번역 엔진</div>' +
+      '<div class="mode-switch">' +
+        '<button class="mode-btn ' + (c.engine === 'st' ? 'active' : '') + '" onclick="kpTrSet(\'engine\',\'st\')">🌐 실리태번 번역</button>' +
+        '<button class="mode-btn ' + (c.engine === 'ai' ? 'active' : '') + '" onclick="kpTrSet(\'engine\',\'ai\')">🤖 폰 AI</button>' +
+      '</div>' +
+      '<div class="settings-desc">' + (c.engine === 'st'
+        ? '실리태번 <b>번역 확장</b>의 제공자(기본 구글)를 써요. <b>토큰 0</b>.'
+        : '앞뒤 채팅 없이 <b>그 메시지 글자만</b> AI에게 보내 번역해요. 누를 때마다 그 메시지만큼 토큰이 들어요.') + '</div>' +
+      (c.engine === 'ai' ? _kpTrAiSettingsHtml(c) : '') +
+    '</div>';
+}
+
 // ===== RENDER: DM CHAT =====
 // 한 DM 메시지의 행 HTML — 풀 렌더(rDMChat)와 실시간 도착(addMsgsSequentially)이 같은 마크업을 쓰도록 단일 소스화.
 // 여기 한 곳만 고치면 양쪽이 항상 일치 → "실시간은 안 묶이고 클릭 안 됨, 나갔다 와야 정상" 버그 차단.
@@ -2654,11 +3004,12 @@ function _dmMsgRowHtml(name, conv, i) {
   var prev = conv.messages[i-1];
   var isHead = !prev || prev.from !== msg.from || prev.deleted;
   var miniAvatar = isUser ? renderChatAvatar('__user__', 28) : renderChatAvatar(name, 28);
-  var bubblesHtml = '';
+  var bubblesHtml = '', _tv = null;
   if (msg.deleted) {
     bubblesHtml = '<div class="msg-bubble deleted" onclick="onMsgTap(event,\'' + safeJs(name) + '\',' + i + ')"><span style="font-style:italic;opacity:0.55">삭제된 메시지입니다</span></div>';
   } else {
-    var parts = renderMsgParts(msg.text, msg.imgUrl);
+    var _tv = _kpTrView('dm', name, i, msg);
+    var parts = renderMsgParts(_tv.text, msg.imgUrl);
     parts.forEach(function(part) {
       var bCls = 'msg-bubble' + (part.cls ? ' ' + part.cls : '');
       // 카드(사진/기프티콘/위치/약속) 위에 항상 잘 보이는 ⋯ 메뉴 버튼 — onMsgTap(답장/수정/인식보기·재생성/삭제).
@@ -2671,11 +3022,12 @@ function _dmMsgRowHtml(name, conv, i) {
   var avatarHtml = isHead
     ? '<div class="chat-avatar">' + miniAvatar + '</div>'
     : '<div class="chat-avatar avatar-spacer"></div>';
-  return '<div class="msg-row ' + cls + (isHead ? '' : ' grouped') + '">' +
+  return '<div class="msg-row ' + cls + (isHead ? '' : ' grouped') + '" data-kpidx="' + i + '">' +
     avatarHtml +
     '<div class="msg-col">' +
     (!isUser && isHead ? '<div class="msg-sender">' + escapeHtml(name) + '</div>' : '') +
     bubblesHtml +
+    (_tv ? _tv.link : '') +
     (msg.edited ? '<div class="msg-meta"><span>수정됨</span></div>' : '') +
     '</div>' +
   '</div>';
@@ -2790,6 +3142,7 @@ function onMsgTap(e, name, idx) {
   if (msg.from !== 'user') {
     items.push({ icon: 'fa-arrows-rotate', label: '재생성', action: function() { retrySend(name); } });
   }
+  if (msg._trOn && msg._tr) items.push({ icon: 'fa-language', label: '다시 번역', action: function() { kpTrRedo('dm', name, idx); } });
   items.push({ icon: 'fa-trash', label: '삭제', danger: true, action: function() { confirmDelMsg(name, idx); } });
   showCtx(r.left - f.left, r.bottom - f.top + 2, items);
 }
@@ -3109,22 +3462,26 @@ function _renderCallMsgBubbles(messages) {
       return '<div style="text-align:center;color:var(--text-muted);font-size:11px;padding:6px 0">' + escapeHtml(m.text) + '</div>';
     }
     var isUser = m.from === 'user';
+    var shown = _kpCallShowText(m);
     return '<div style="display:flex;justify-content:' + (isUser?'flex-end':'flex-start') + ';padding:3px 12px">' +
       '<div style="max-width:80%;padding:8px 12px;border-radius:14px;font-size:13px;line-height:1.5;' +
       (isUser ? 'background:var(--bubble-user);color:#fff' : 'background:var(--bubble-npc);color:var(--text)') +
-      '">' + escapeHtml(m.text) + '</div></div>';
+      '">' + escapeHtml(shown) +
+      (shown !== m.text ? '<div style="font-size:11px;opacity:.6;margin-top:4px">' + escapeHtml(m.text) + '</div>' : '') +
+      '</div></div>';
   }).join('');
 }
 function showCallTranscript(idx) {
   var c = phoneData.callLog[idx];
   if (!c || !c.transcript || c.transcript.length === 0) return;
   showModal(
-    '<div class="modal-dialog" style="max-height:70vh;display:flex;flex-direction:column">' +
-      '<div class="modal-title">📞 ' + escapeHtml(c.contact) + ' <span style="font-size:12px;font-weight:400;color:var(--text-muted)">(' + formatDur(c.duration||0) + ')</span></div>' +
+    '<div class="modal-dialog" data-kpcalllog="1" style="max-height:70vh;display:flex;flex-direction:column">' +
+      '<div class="modal-title" style="display:flex;align-items:center;gap:6px">📞 ' + escapeHtml(c.contact) + ' <span style="font-size:12px;font-weight:400;color:var(--text-muted);flex:1">(' + formatDur(c.duration||0) + ')</span>' + _kpCallTrBtn('kpCallLogTrToggle(\'log\',\'' + idx + '\')') + '</div>' +
       '<div style="overflow-y:auto;flex:1;padding:8px 0">' + _renderCallMsgBubbles(c.transcript) + '</div>' +
       '<div class="modal-btns"><button class="modal-btn secondary" onclick="hideModal()">닫기</button></div>' +
     '</div>'
   );
+  _kpCallLogAutoFill('log', idx, c.transcript);
 }
 function deleteCallLog(idx) {
   if (idx >= 0 && idx < phoneData.callLog.length) {
@@ -3306,7 +3663,11 @@ async function triggerNpcCallGreeting(name) {
         var cText = result.cleaned;
         var npcHangup = /\[hangup\]/i.test(cText);
         cText = cText.replace(/\[hangup\]/gi, '').trim();
-        if (cText) callMessages.push({ from: 'npc', text: cText });
+        if (cText) {
+          callMessages.push({ from: 'npc', text: cText });
+          var _gm = callMessages[callMessages.length - 1];
+          if (_kpCallNeedsTr(_gm)) await _kpCallTrFill([_gm]);
+        }
         if (npcHangup) {
           isGenerating = false;
           rCallActive(_kpEl('screen'), name);
@@ -3361,6 +3722,83 @@ function rCallRinging(el, name) {
 }
 
 var _callSubFadeTimer = null;
+// ── 통화 번역 ─────────────────
+// 통화 화면 🌐 스위치(settings.trView.call, 봇별, 기본 켜짐). 켜져 있으면 상대 대사를 받자마자 대사 전체를 한 번에 번역해
+// 자막은 번역문(애니메이션도 번역문 기준), 그 아래 원문을 작게 보여준다. 내 말은 번역 안 함.
+// 번역문은 대사 객체에 _trf.text로 저장 — 통화기록(transcript)이 같은 객체를 쓰므로 기록에도 그대로 남는다.
+function _kpCallShowText(m) {
+  if (!m) return '';
+  return (m.from !== 'user' && _kpTrFeedOn('call') && _kpTrValid(m, 'text', _kpTrCfg())) ? m._trf.text.text : m.text;
+}
+function _kpCallNeedsTr(m) {
+  if (!m || m.from === 'user' || m.from === '__system__' || !m.text || !_kpTrFeedOn('call')) return false;
+  var c = _kpTrCfg();
+  if (_kpTrValid(m, 'text', c)) return false;
+  var sc = _kpTrScript(_kpTrPlain(m.text));
+  return !!sc && sc !== c.lang;
+}
+// 여러 대사를 한 번에 번역해 저장(통화 중 새 대사 1개, 기록 창에선 빠진 것 전부)
+async function _kpCallTrFill(list) {
+  var need = (list || []).filter(_kpCallNeedsTr);
+  if (!need.length) return 0;
+  var c = _kpTrCfg();
+  var srcs = need.map(function (m) { return _kpTrPlain(m.text); });
+  var outs = [];
+  try { outs = await _kpTranslateMany(srcs, c); } catch (e) { _kpLog('번역', '통화 실패: ' + (e && e.message || e)); }
+  var ok = 0;
+  need.forEach(function (m, i) {
+    var tr = outs && outs[i] ? String(outs[i]).trim() : '';
+    if (!tr) return;
+    if (!m._trf || typeof m._trf !== 'object') m._trf = {};
+    m._trf.text = { lang: c.lang, src: srcs[i], text: tr }; ok++;
+  });
+  if (ok) saveData();
+  _kpLog('번역', '통화 ' + (c.engine === 'st' ? 'ST 번역' : '폰 AI') + ' ' + ok + '/' + need.length + '개');
+  if (ok < need.length) showToast('번역 못 한 대사가 있어요 (' + (need.length - ok) + '개)', 'error');
+  return ok;
+}
+// 자막 아래 원문 줄 갱신(자막 애니메이션 중엔 화면을 다시 그리지 않으므로 직접 갱신)
+function _kpCallOrigSet(m) {
+  var o = _kpEl('call-sub-orig'); if (!o) return;
+  var show = !!(m && m.from !== 'user' && _kpCallShowText(m) !== m.text);
+  o.textContent = show ? m.text : '';
+  o.style.display = show ? '' : 'none';
+  _kpForcePaint();
+}
+function _kpCallTrBtn(onclick) {
+  if (!_kpTrCfg().on) return '';
+  var on = _kpTrFeedOn('call'), busy = !!_kpTrFeedBusy.call;
+  return '<button class="call-sub-tr-btn' + (on ? ' on' : '') + '" onclick="' + onclick + '" title="' + (on ? '원문 보기' : '번역 보기') + '">' +
+    '<i class="fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-language') + '"></i></button>';
+}
+// 통화 화면 🌐 — 켜면 마지막 상대 대사를 바로 번역
+async function kpCallTrToggle(name) {
+  _kpTrViewSet('call', !_kpTrFeedOn('call'));
+  var last = callMessages[callMessages.length - 1];
+  if (_kpTrFeedOn('call') && _kpCallNeedsTr(last) && !_kpTrFeedBusy.call) {
+    _kpTrFeedBusy.call = true;
+    if (callActive && !isGenerating) rCallActive(_kpEl('screen'), name);
+    await _kpCallTrFill([last]);
+    delete _kpTrFeedBusy.call;
+  }
+  if (callActive && !isGenerating) rCallActive(_kpEl('screen'), name);
+}
+// 통화기록 창 🌐 — 켜면 빠진 대사를 한 번에 번역하고 창을 다시 연다
+async function kpCallLogTrToggle(kind, key) {
+  _kpTrViewSet('call', !_kpTrFeedOn('call'));
+  _kpCallLogReopen(kind, key);
+}
+function _kpCallLogReopen(kind, key) {
+  if (kind === 'live') showCallLogOverlay(key); else showCallTranscript(Number(key));
+}
+async function _kpCallLogAutoFill(kind, key, list) {
+  if (!_kpTrFeedOn('call') || _kpTrFeedBusy.call || !(list || []).some(_kpCallNeedsTr)) return;
+  _kpTrFeedBusy.call = true;
+  _kpCallLogReopen(kind, key);
+  await _kpCallTrFill(list);
+  delete _kpTrFeedBusy.call;
+  if (_kpQ('#kkang_phone-root .modal-dialog[data-kpcalllog]')) _kpCallLogReopen(kind, key); // 기록 창이 아직 열려 있을 때만
+}
 function rCallActive(el, name) {
   if (!name) { nav('phone'); return; }
   if (_callSubFadeTimer) { clearTimeout(_callSubFadeTimer); _callSubFadeTimer = null; }
@@ -3371,7 +3809,8 @@ function rCallActive(el, name) {
     ? '<img class="call-av' + avSpeak + '" src="' + callAvatarImg + '">'
     : '<div class="call-avatar-big call-av' + avSpeak + '" style="background:' + getAvatarColor(name) + '">' + getInitial(name) + '</div>';
   var lastMsg = callMessages[callMessages.length - 1];
-  var subText = lastMsg ? lastMsg.text : '';
+  var subText = lastMsg ? _kpCallShowText(lastMsg) : '';
+  var origText = (lastMsg && subText !== lastMsg.text) ? lastMsg.text : ''; // 번역 중이면 원문
   var subFrom = lastMsg ? lastMsg.from : 'user';
   var isLast = !!lastMsg;
   var elapsed = callStartTime ? Math.floor((Date.now() - callStartTime) / 1000) : 0;
@@ -3398,7 +3837,9 @@ function rCallActive(el, name) {
       '</div>' +
       '<div class="call-subtitle-wrap">' +
         '<div class="' + subCls + '" id="call-sub-text">' + subHtml + '</div>' +
+        '<div class="call-sub-orig" id="call-sub-orig"' + ((origText && !generating) ? '' : ' style="display:none"') + '>' + escapeHtml(generating ? '' : origText) + '</div>' +
         '<button class="call-sub-log-btn" onclick="showCallLogOverlay(\'' + safeJs(name) + '\')" title="대화 기록"><i class="fas fa-list"></i></button>' +
+        _kpCallTrBtn('kpCallTrToggle(\'' + safeJs(name) + '\')') +
       '</div>' +
       '<div class="call-input">' +
         '<input type="text" id="call-input" placeholder="' + (generating ? '상대가 말하는 중…' : '말하기...') + '"' + (generating ? ' disabled' : '') + ' onkeydown="if(event.key===\'Enter\')sendCallInput(\'' + safeJs(name) + '\')">' +
@@ -3416,15 +3857,16 @@ function rCallActive(el, name) {
 }
 function showCallLogOverlay(name) {
   var bubblesHtml = callMessages.length > 0
-    ? _renderCallMsgBubbles(callMessages.map(function(m){ return {from: m.from, text: m.text}; }))
+    ? _renderCallMsgBubbles(callMessages)
     : '<div style="text-align:center;color:var(--text-muted);font-size:13px;padding:16px">대화 내역 없음</div>';
   showModal(
-    '<div class="modal-dialog" style="max-height:70vh;display:flex;flex-direction:column">' +
-      '<div class="modal-title">📞 ' + escapeHtml(name) + ' <span style="font-size:12px;font-weight:400;color:var(--text-muted)">통화 기록</span></div>' +
+    '<div class="modal-dialog" data-kpcalllog="1" style="max-height:70vh;display:flex;flex-direction:column">' +
+      '<div class="modal-title" style="display:flex;align-items:center;gap:6px">📞 ' + escapeHtml(name) + ' <span style="font-size:12px;font-weight:400;color:var(--text-muted);flex:1">통화 기록</span>' + _kpCallTrBtn('kpCallLogTrToggle(\'live\',\'' + safeJs(name) + '\')') + '</div>' +
       '<div style="overflow-y:auto;flex:1;padding:8px 0">' + bubblesHtml + '</div>' +
       '<div class="modal-btns"><button class="modal-btn secondary" onclick="hideModal()">닫기</button></div>' +
     '</div>'
   );
+  _kpCallLogAutoFill('live', name, callMessages);
 }
 function sendCallInput(name) {
   var inp = _kpEl('call-input');
@@ -3548,9 +3990,17 @@ function setProbSetting(key, v) {
 }
 // 채팅 인지량 = 최신 N챗 — 메시지를 자르지 않고 그대로 넣으므로 긴 메시지면 토큰이 커질 수 있음
 // (글자 수 기준 모드 setCtxChars/setCtxMode는 제거 — 인지량 기준을 N챗 하나로 단순화)
+// 잘라서 읽기: 마지막 메시지는 통째, 그 앞 메시지는 끝부분 이만큼(자)만
+var _KP_CTX_TRIM_TAIL = 600;
+function setCtxMode(v) {
+  if (!phoneData.settings) phoneData.settings = {};
+  phoneData.settings.chatCtxMode = (v === 'full' ? 'full' : 'trim');
+  saveData();
+  try { _rSettingsKeep(); } catch (e) { rSettings(_kpEl('screen')); }
+}
 function setCtxMsgs(v) {
   var n = Math.round(Number(v) || 0);
-  if (!n) n = 5;
+  if (!n) n = 3;
   n = Math.max(1, Math.min(50, n));
   if (!phoneData.settings) phoneData.settings = {};
   phoneData.settings.chatCtxMsgs = n;
@@ -3645,15 +4095,16 @@ function rSettings(el) {
       '</div>' +
     '</div>' +
     '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:8px">' +
-      '<div><div class="settings-label">🌐 폰 지역·언어</div><div class="settings-desc">SNS·네티즌(트위터·인스타·라이브·블라인드·에타·OF 공통)이 어느 나라 사람처럼 굴지 정합니다. 서양/일본/중국 배경 봇에서 한국식 캐붕을 막아줘요. 봇(채팅)마다 따로 저장됩니다.</div></div>' +
-      '<div style="font-size:11px;color:var(--text-sec);font-weight:600">지역/문화</div>' +
+      '<div><div class="settings-label">🌐 폰 지역·언어</div><div class="settings-desc">깡폰 전체를 그 나라·그 언어로 바꿔요. <b>출력 언어</b>는 문자·통화·단톡·SNS·댓글·라이브 등 <b>폰에서 생성되는 모든 글</b>에 적용돼요 — 내가 어떤 언어로 보내든, 메인 채팅이 어떤 언어든 이 언어로만 나와요(채팅은 내용만 참고). <b>지역/문화</b>는 네티즌(X·인스타·라이브·블라인드·에타·OF)의 이름·말투·문화를 그 나라 사람처럼 바꿔서, 서양/일본/중국 배경 봇의 한국식 캐붕을 막아줘요. <b>연락처 캐릭터</b>(문자·통화 상대)는 지역/문화와 상관없이 <b>원래 설정의 국적·말투</b>를 따라가요(언어만 출력 언어로). 봇(채팅)마다 따로 저장됩니다.</div></div>' +
+      '<div style="font-size:11px;color:var(--text-sec);font-weight:600">지역/문화 (네티즌)</div>' +
       '<div class="locale-grid">' + localeBtns + '</div>' +
       localeCustomInput +
-      '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">출력 언어</div>' +
+      '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">출력 언어 (폰 전체)</div>' +
       '<div class="locale-grid">' + langBtns + '</div>' +
       '<div style="font-size:11px;color:var(--text-sec);font-weight:600;margin-top:2px">💰 화폐 (후원·해금·구독 금액 표시)</div>' +
       '<select class="modal-input" onchange="setCurrency(this.value)" style="height:38px;font-size:13px;margin:0">' + currencyOpts + '</select>' +
-    '</div>';
+    '</div>' +
+    _kpTrSettingsHtml();
 
   // ── 🎨 폰꾸 탭: 화면 모드(테마) + 텍스트 가리기 ──
   var maskRows = (phoneData.settings.textMaskRules || []).map(function (r, i) {
@@ -3697,15 +4148,28 @@ function rSettings(el) {
       //  별도 지정 드롭다운은 혼란만 줬음. 폰 프로필도 없으면 기존 직통 체인.)
       // 💸 경량 API 호출 — '현재 연결 사용'일 때 메인 프리셋·풀채팅 통째 전송을 막는 토글
       '<div class="settings-item"><div><div class="settings-label">💸 경량 API 호출 (토큰 절약)</div><div class="settings-desc">폰의 AI 요청에 <b>폰 프롬프트만</b> 보냅니다(메인 프리셋 지시문·전체 채팅·월드인포 미동봉 → 호출당 토큰 대폭 절약). 맥락은 \'채팅 내용 인지\'가 압축해서 공급해요. <b>끄면</b> 예전처럼 메인 파이프라인 통째 전송(프리셋 탈옥이 폰에도 필요하거나, 폰 응답이 자꾸 거절될 때만 권장). ※ 폰 전용 프로필 선택 중엔 항상 경량입니다.</div></div>' +
-        '<div class="toggle ' + (phoneData.settings.lightMode !== false ? 'on' : '') + '" onclick="toggleSetting(\'lightMode\',this,true)"></div></div>';
+        '<div class="toggle ' + (phoneData.settings.lightMode !== false ? 'on' : '') + '" onclick="toggleSetting(\'lightMode\',this,true)"></div></div>' +
+      // 🧠 추론 최소화 — 폰 요청만 생각(추론) 토큰을 최소로
+      '<div class="settings-item kp-sub"><div><div class="settings-label">🧠 추론 최소화 (토큰 절약)</div><div class="settings-desc">폰 요청은 AI가 <b>생각(추론)을 최소로</b> 하게 해요. 생각 토큰도 출력 요금이라 크게 아껴져요. 메인 채팅 설정은 안 건드려요. (Gemini 3.x Flash는 완전히 끌 수 없어 가장 낮은 단계로 가요)</div></div>' +
+        '<div class="toggle ' + (phoneData.settings.minReasoning !== false ? 'on' : '') + '" onclick="toggleSetting(\'minReasoning\',this)"></div></div>';
 
   // 📜 채팅 인지량 게이지 — '채팅 내용 인지' 바로 아래 배치. 경량 ON + 인지 ON일 때만 표시.
   // 기준 2종: 글자 수 예산(기본, 압축) vs 최신 N챗(메시지를 자르지 않고 통째 — 토큰 무관)
   var ctxGaugeHtml = (phoneData.settings.lightMode === false || phoneData.settings.chatAware === false) ? '' : (function() {
-    var cm = Math.max(1, Math.min(50, Number(phoneData.settings.chatCtxMsgs) || 5));
-    return '<div class="settings-item">' +
-      '<div><div class="settings-label">📜 채팅 인지량</div><div class="settings-desc">최근 메인 채팅을 <b>자르지 않고 통째로</b> 폰 요청에 끼워줘요(1~50). 많을수록 <b>호출당 토큰이 크게 늘어요.</b></div></div>' +
+    var cm = Math.max(1, Math.min(50, Number(phoneData.settings.chatCtxMsgs) || 3));
+    var trimOn = phoneData.settings.chatCtxMode !== 'full';
+    return '<div class="settings-item kp-sub">' +
+      '<div><div class="settings-label">📜 채팅 인지량</div><div class="settings-desc">최근 메인 채팅 몇 챗을 폰 요청에 끼워줄지(1~50, 기본 3). 많을수록 <b>호출당 토큰이 크게 늘어요.</b> 상태창·코드블록·HTML은 자동으로 빼고 넣어요.</div></div>' +
       _kpNumBox('ctx-msgs-num', cm, 1, 50, '챗', 'setCtxMsgs(this.value)') +
+    '</div>' +
+    '<div class="settings-item kp-sub" style="flex-direction:column;align-items:stretch;gap:8px">' +
+      '<div><div class="settings-label">✂️ 읽는 방식</div><div class="settings-desc">' + (trimOn
+        ? '<b>잘라서 읽기</b>: 가장 최근 메시지는 통째로, 그 앞 메시지는 <b>끝부분 ' + _KP_CTX_TRIM_TAIL + '자만</b> 읽어요. 메시지가 긴 봇이면 토큰이 크게 줄어요.'
+        : '<b>전부 읽기</b>: 고른 챗을 자르지 않고 통째로 읽어요. 상황을 가장 잘 알지만 메시지가 긴 봇이면 토큰이 많이 들어요.') + '</div></div>' +
+      '<div class="mode-switch">' +
+        '<button class="mode-btn ' + (trimOn ? 'active' : '') + '" onclick="setCtxMode(\'trim\')">✂️ 잘라서 읽기</button>' +
+        '<button class="mode-btn ' + (trimOn ? '' : 'active') + '" onclick="setCtxMode(\'full\')">📄 전부 읽기</button>' +
+      '</div>' +
     '</div>';
   })();
 
@@ -3745,8 +4209,8 @@ function rSettings(el) {
       (phoneData.settings.useWorldInfo === true ? (function() {
         var c = _kpWIPickCfg() || {};
         var mx = _kpWIMaxTokens(c);
-        return '<div class="settings-item kp-wi-box" id="kp-wi-picker"><div class="settings-desc">로어북 불러오는 중…</div></div>' +
-          '<div class="settings-item">' +
+        return '<div class="settings-item kp-sub kp-wi-box" id="kp-wi-picker"><div class="settings-desc">로어북 불러오는 중…</div></div>' +
+          '<div class="settings-item kp-sub">' +
             '<div><div class="settings-label">월드인포 최대 토큰</div><div class="settings-desc">고른 항목의 합계 한도(200~40,000). 넘치면 목록 아래쪽 항목부터 빠져요.</div></div>' +
             _kpNumBox('kp-wi-max', mx, 200, 40000, '토큰', 'kpWISetMax(this.value)') +
           '</div>';
@@ -3755,16 +4219,16 @@ function rSettings(el) {
         '<div class="toggle ' + (phoneData.settings.imageGen ? 'on' : '') + '" onclick="toggleSetting(\'imageGen\',this,true)"></div></div>' +
       // 🪄 오토픽 연동 — AI 이미지 생성 ON + AutoPic 확장이 설치된 경우에만 노출
       (phoneData.settings.imageGen && _autopicAvail() ?
-        '<div class="settings-item"><div><div class="settings-label">🪄 오토픽(AutoPic) 연동</div><div class="settings-desc">폰 이미지에 오토픽의 <b>NAI 리스케일·바이브·레퍼런스</b>를 적용해 품질을 올립니다. <b style="color:var(--red)">⚠️ 단, 오토픽은 연결된 외형 프롬프트 캐릭터들이 모두 하나의 사진에 같이 출력될 수 있습니다.</b></div></div>' +
+        '<div class="settings-item kp-sub"><div><div class="settings-label">🪄 오토픽(AutoPic) 연동</div><div class="settings-desc">폰 이미지에 오토픽의 <b>NAI 리스케일·바이브·레퍼런스</b>를 적용해 품질을 올립니다. <b style="color:var(--red)">⚠️ 단, 오토픽은 연결된 외형 프롬프트 캐릭터들이 모두 하나의 사진에 같이 출력될 수 있습니다.</b></div></div>' +
           '<div class="toggle ' + (phoneData.settings.autopicLink ? 'on' : '') + '" onclick="toggleSetting(\'autopicLink\',this)"></div></div>' : '') +
       // ✅ AI 토글이 켜졌을 때: 유저 외형 태그 -> 이미지 태그 규칙 순서로 배치
       (phoneData.settings.imageGen ?
-        '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:6px">' +
+        '<div class="settings-item kp-sub" style="flex-direction:column;align-items:stretch;gap:6px">' +
           '<div><div class="settings-label">🎨 유저 외형 태그</div><div class="settings-desc">AI 이미지 생성 시 유저 캐릭터의 외형 묘사</div></div>' +
           '<textarea class="modal-textarea" id="inp-user-appearance" placeholder="예: brown hair, glasses, casual outfit" style="margin:0;min-height:40px;font-size:12px;resize:vertical" onchange="setAppearanceTags(\'__user__\',this.value)">' + escapeHtml(getAppearanceTags('__user__') || '') + '</textarea>' +
           '<button class="modal-btn secondary" id="extract-ap-btn" style="width:100%;font-size:12px" onclick="extractAppearanceFromCard(\'__user__\',\'inp-user-appearance\')"><i class="fas fa-wand-magic-sparkles"></i> 내 페르소나에서 외형 불러오기</button>' +
         '</div>' +
-        '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:6px">' +
+        '<div class="settings-item kp-sub" style="flex-direction:column;align-items:stretch;gap:6px">' +
           '<div><div class="settings-label">🧩 이미지 태그 규칙 (Danbooru)</div><div class="settings-desc">AI가 게시물 사진을 어떤 Danbooru 태그 형식으로 만들지에 대한 규칙. 캐릭터 외형은 연락처 프로필의 외형태그가 자동으로 합쳐집니다.</div></div>' +
           '<textarea class="modal-textarea" id="inp-sdgen-prompt" style="margin:0;min-height:120px;font-size:11px;line-height:1.45;resize:vertical;font-family:monospace">' + escapeHtml(_sdTagRules()) + '</textarea>' +
           '<div style="display:flex;gap:8px;justify-content:flex-end">' +
@@ -3799,9 +4263,9 @@ function rSettings(el) {
         '<div class="toggle ' + (phoneData.settings.liveNotify ? 'on' : '') + '" onclick="toggleSetting(\'liveNotify\',this,true)"></div></div>' +
       // 🗂️ 연락처 자동 추가 · 💬 단톡 자동 초대 — 채팅 연동 알림 ON일 때만 노출. AI 액션 태그를 옵트인(가이드 약 매 호출마다 +250토큰/개)
       (phoneData.settings.liveNotify ?
-        '<div class="settings-item"><div><div class="settings-label">🗂️ 연락처 자동 추가</div><div class="settings-desc">스토리에서 번호를 주고받는 등 흐름이 생기면 AI가 그 인물을 <b>연락처에 자동 저장</b>합니다. 켜면 메인 채팅에 안내 지시문이 붙어요 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
+        '<div class="settings-item kp-sub"><div><div class="settings-label">🗂️ 연락처 자동 추가</div><div class="settings-desc">스토리에서 번호를 주고받는 등 흐름이 생기면 AI가 그 인물을 <b>연락처에 자동 저장</b>합니다. 켜면 메인 채팅에 안내 지시문이 붙어요 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
           '<div class="toggle ' + (phoneData.settings.autoContactCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoContactCreate\',this)"></div></div>' +
-        '<div class="settings-item"><div><div class="settings-label">💬 단톡 자동 초대</div><div class="settings-desc">스토리에서 단체방이 만들어지거나 누가 초대되면 AI가 <b>그룹 채팅을 자동 생성·초대</b>합니다 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
+        '<div class="settings-item kp-sub"><div><div class="settings-label">💬 단톡 자동 초대</div><div class="settings-desc">스토리에서 단체방이 만들어지거나 누가 초대되면 AI가 <b>그룹 채팅을 자동 생성·초대</b>합니다 <b>(매 호출 당 약 +250토큰)</b>.</div></div>' +
           '<div class="toggle ' + (phoneData.settings.autoGroupCreate ? 'on' : '') + '" onclick="toggleSetting(\'autoGroupCreate\',this)"></div></div>'
         : '') +
       // 🎚️ 먼저 연락 확률 슬라이더 3종 — 채팅 연동 알림 ON일 때만 표시
@@ -3813,7 +4277,7 @@ function rSettings(el) {
             _kpNumBox(key + '-num', v, 0, 100, '%', 'setProbSetting(\'' + key + '\',this.value)') +
           '</div>';
         }
-        return '<div class="settings-item" style="flex-direction:column;align-items:stretch;gap:2px">' +
+        return '<div class="settings-item kp-sub" style="flex-direction:column;align-items:stretch;gap:2px">' +
           '<div><div class="settings-label">🎚️ 먼저 연락 확률(API호출)</div><div class="settings-desc">NPC가 먼저 연락하는 빈도를 조절합니다. 0% = 그 기능만 끔.</div></div>' +
           probRow('probChatContact', 18, '💬 채팅 반응 연락', '메인 채팅 메시지마다 맥락 보고 문자·전화할 확률 (2.5분 쿨다운)') +
           probRow('probFirstDm', 15, '📨 랜덤 먼저 DM', '폰 사용 중 NPC가 불쑥 먼저 문자할 확률') +
@@ -3832,7 +4296,7 @@ function rSettings(el) {
       statusHtml +
       tabBar +
       (tab === 'world' ? worldTab : (tab === 'deco' ? decoTab : (tab === 'msg' ? msgTab : generalTab))) +
-      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v1.1.0 · <u>🐞 디버그 로그</u></div></div>' +
+      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v2.0.0 · <u>🐞 디버그 로그</u></div></div>' +
     '</div>';
   try { _kpApplyMaskDOM(); } catch (e) {} // 텍스트 가리기 적용(설정 화면 자체도 — 규칙 편집칸은 data-nomask로 제외)
   if (tab === 'general' && phoneData.settings.useWorldInfo === true) _kpDrawWIPicker(); // 로어북 항목은 비동기로 채움
@@ -4451,13 +4915,27 @@ function _isIsolated() {
   return _kpTransport(false) !== 'pipeline';
 }
 // 메인 채팅 최근 N개를 화자명 + 길이제한으로 압축(토큰 폭주 방지). MSG는 길 수 있어 줄당·전체 캡 필수.
-function _compactStory(maxMsgs, perMsgCap, totalCap) {
+// 메인 채팅 메시지에서 서사만 남긴다 — 코드블록, 상태창·선택지·변수·생각 같은 메타 태그 블록,
+// <style>/<script>/<details> 블록, 남은 HTML 태그(안의 글자는 유지)를 뺀다.
+var _KP_STORY_META_TAGS = 'status|statusblock|status_window|state|stats|choices|choice|options|option|updatevariable|update_variable|analysis|think|thinking|reasoning|summary|memo|note|info|infoblock|dashboard|hud|kkang_phone_ui|phone|style|script|details';
+function _kpStoryClean(text) {
+  var s = String(text || '');
+  s = s.replace(/```[\s\S]*?```/g, ' ');
+  s = s.replace(new RegExp('<(' + _KP_STORY_META_TAGS + ')\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>', 'gi'), ' ');
+  s = s.replace(/<!--[\s\S]*?-->/g, ' ');
+  s = s.replace(/<\/?[a-zA-Z][^>]*>/g, ' ');
+  return s.replace(/\s+/g, ' ').trim();
+}
+function _compactStory(maxMsgs, perMsgCap, totalCap, olderTail) {
   try {
     if (!ST || !ST.chat || !ST.chat.length) return '';
-    var lines = ST.chat.slice(-(maxMsgs || 6)).map(function (m) {
+    var picked = ST.chat.slice(-(maxMsgs || 6));
+    var lines = picked.map(function (m, i) {
       if (!m || !m.mes) return '';
       var who = m.is_user ? 'User' : (m.name || 'Char');
-      var t = String(m.mes).replace(/\s+/g, ' ').trim();
+      var t = _kpStoryClean(m.mes);
+      if (!t) return '';
+      if (olderTail && i < picked.length - 1 && t.length > olderTail) t = '…' + t.slice(-olderTail); // 앞 메시지는 끝부분만
       var cap = perMsgCap || 350;
       if (t.length > cap) t = t.slice(0, cap) + '…';
       return who + ': ' + t;
@@ -4533,8 +5011,10 @@ function _isolatedCtxBlock(name) {
   if (s.chatAware !== false) {
     // 채팅 인지량 = 최신 N챗만.
     // (Infinity 캡 → _compactStory 길이 제한 무력화). 긴 메시지면 토큰 커질 수 있음(설정에 안내).
-    var nMsgs = Math.max(1, Math.min(50, Number(s.chatCtxMsgs) || 5));
-    var story = _compactStory(nMsgs, Infinity, Infinity);
+    var nMsgs = Math.max(1, Math.min(50, Number(s.chatCtxMsgs) || 3));
+    var trim = s.chatCtxMode !== 'full'; // 기본 = 잘라서 읽기
+    var story = _compactStory(nMsgs, Infinity, Infinity, trim ? _KP_CTX_TRIM_TAIL : 0);
+    try { _kpLog('맥락', '메인 채팅 ' + nMsgs + '챗(' + (trim ? '잘라서' : '전부') + ') → ' + story.length + '자'); } catch (e) {}
     if (story) out += '## CURRENT STORY (what is happening in the roleplay right now — reference only, do NOT narrate it back)\n' + story + '\n\n';
   }
   return out;
@@ -5266,7 +5746,7 @@ async function triggerGroupWelcome(gid, host, isInvite) {
       'You are generating messages for a group chat on a phone. This COMPLETELY OVERRIDES all previous output format rules.\n' +
       'No prose, no narration, no status windows, no tags, no decorative symbols.\n\n' +
       _isolatedCtxBlock(hostName) +
-      '⚠️ LANGUAGE: Mirror the language the user writes in (Korean→Korean, English→English).\n\n' +
+      _kpOutLangRule() + '\n' +
       '👥 GROUP "' + group.name + '" — Members:\n- User (the user is a participant)\n' +
       members.map(function (n) { return '- ' + n; }).join('\n') + '\n\n' +
       (isInvite
@@ -5600,6 +6080,7 @@ function onGroupMsgTap(e, gid, idx) {
     } else if (msg.imgUrl && phoneData.settings.imageGen) {
       items.push({ icon: 'fa-rotate', label: '이미지 재생성', action: function() { regenerateImage(null, idx, true, gid); } });
     }
+    if (msg._trOn && msg._tr) items.push({ icon: 'fa-language', label: '다시 번역', action: function() { kpTrRedo('group', gid, idx); } });
     items.push({ icon: 'fa-trash', label: '삭제', danger: true, action: function() { confirmGroupDelMsg(gid, idx); } });
   }
   if (!items.length) return;
@@ -5987,8 +6468,7 @@ function buildOverrideHeader(name, mode) {
     'Chat history and previous narrative are REFERENCE ONLY for character context.\n' +
     'The output structure here is COMPLETELY DIFFERENT from the main story.\n\n' +
     _isolatedCtxBlock(name) +
-    '\u26A0\uFE0F LANGUAGE RULE: Follow the SAME LANGUAGE the user is writing in.\n' +
-    'If the user writes in English, respond in English. If Korean, respond in Korean. Mirror their language naturally.\n\n' +
+    _kpOutLangRule() + '\n' +
     '\u26D4 ABSOLUTELY FORBIDDEN (any single violation = failure):\n' +
     '- <status> tags, status windows (Name=, Date=, Caste= etc.)\n' +
     '- <choices> tags, choice options (1. [option] etc.)\n' +
@@ -6341,9 +6821,12 @@ async function sendCallMsg(name, text) {
         cText = cText.replace(/\[hangup\]/gi, '').trim();
         if (cText) {
           callMessages.push({ from: 'npc', text: cText });
+          var _cm = callMessages[callMessages.length - 1];
+          if (_kpCallNeedsTr(_cm)) await _kpCallTrFill([_cm]); // 번역이 켜져 있으면 대사 전체를 한 번에
           isGenerating = false;
           if (phoneData.settings.callSubtitleAnim) {
-            var sentences = _splitCallSentences(cText);
+            var sentences = _splitCallSentences(_kpCallShowText(_cm));
+            _kpCallOrigSet(_cm);
             await _showCallSentences(name, sentences);
             // ⚠️ 자막 애니가 끝나면 입력칸만 다시 켠다. rCallActive로 전체 재렌더하면 자막칸이 '마지막 한 줄'이 아니라
             //    메시지 전체(모든 줄)로 덮여 애니메이션이 무의미해진다 → 마지막 줄 유지한 채 입력만 활성화.
@@ -6649,7 +7132,7 @@ function _kpCurCcModel(cc, src) {
 // (실측: genraw 1콜에 promptTokenCount=1441) RP 모델이 태그 대신 소설/상태창을 뱉는다.
 // 이 함수는 그걸 전부 빼고 system+user(+거부방지 prefill)만 백엔드에 직접 전송 → 누수 원천 차단.
 // chat completion 연결에서만 동작(아니면 null → 호출부가 기존 genraw로 폴백).
-async function _kpCleanGen(systemPrompt, userPrompt, prefill, maxTokens, imageUrl) {
+async function _kpCleanGen(systemPrompt, userPrompt, prefill, maxTokens, imageUrl, extraBody) {
   try {
     // 로드 시점의 ST 스냅샷은 버전에 따라 mainApi/chatCompletionSettings가 없을 수 있다
     // (실측: cleanGen이 조용히 null → genraw 폴백 → promptTokenCount 1439 → 소설).
@@ -6685,6 +7168,7 @@ async function _kpCleanGen(systemPrompt, userPrompt, prefill, maxTokens, imageUr
       temperature: (typeof cc.temp_openai === 'number') ? cc.temp_openai : 0.6,
       stream: false, max_tokens: maxTokens || 400
     };
+    Object.assign(body, _kpReasonOverride(), extraBody || {});
     if (cc.reverse_proxy) { body.reverse_proxy = cc.reverse_proxy; body.proxy_password = cc.proxy_password || ''; }
     var resp = await fetch('/api/backends/chat-completions/generate', {
       method: 'POST',
@@ -6779,7 +7263,7 @@ async function _kpTagProfileGen(sys, usr, maxTokens) {
     var pid = s.phoneProfileId;
     var svc = ST && ST.ConnectionManagerRequestService;
     if (!pid || !svc || typeof svc.sendRequest !== 'function') return null;
-    var res = await svc.sendRequest(pid, String(sys || '') + '\n\n' + String(usr || ''), maxTokens || 300);
+    var res = await svc.sendRequest(pid, String(sys || '') + '\n\n' + String(usr || ''), maxTokens || 300, undefined, _kpReasonOverride());
     var out = (res == null) ? '' : (typeof res === 'string' ? res : (typeof res.content === 'string' ? res.content : String(res.content != null ? res.content : '')));
     out = String(out || '').trim();
     if (!out) { _kpLog('태그', '전용프로필 빈 응답 → 기존 체인 폴백'); return null; }
@@ -7753,11 +8237,12 @@ function _groupMsgRowHtml(gid, group, idx) {
   var prev = group.messages[idx-1];
   var isHead = !prev || prev.from === '__system__' || prev.from !== msg.from || prev.deleted;
   var miniAvatar = isUser ? renderChatAvatar('__user__', 28) : renderChatAvatar(msg.from, 28);
-  var bubblesHtml = '';
+  var bubblesHtml = '', _tv = null;
   if (msg.deleted) {
     bubblesHtml = '<div class="msg-bubble deleted" onclick="onGroupMsgTap(event,\x27' + safeJs(gid) + '\x27,' + idx + ')"><span style="font-style:italic;opacity:0.55">삭제된 메시지입니다</span></div>';
   } else {
-    var parts = renderGroupMsgParts(msg.text, group.members, msg.imgUrl);
+    _tv = _kpTrView('group', gid, idx, msg);
+    var parts = renderGroupMsgParts(_tv.text, group.members, msg.imgUrl);
     parts.forEach(function(part) {
       var bCls = 'msg-bubble' + (part.cls ? ' ' + part.cls : '');
       var menuBtn = (part.cls === 'has-card')
@@ -7769,11 +8254,12 @@ function _groupMsgRowHtml(gid, group, idx) {
   var avatarHtml = isHead
     ? '<div class="chat-avatar">' + miniAvatar + '</div>'
     : '<div class="chat-avatar avatar-spacer"></div>';
-  return '<div class="msg-row ' + cls + (isHead ? '' : ' grouped') + '">' +
+  return '<div class="msg-row ' + cls + (isHead ? '' : ' grouped') + '" data-kpidx="' + idx + '">' +
     avatarHtml +
     '<div class="msg-col">' +
     (!isUser && isHead ? '<div class="msg-sender">' + escapeHtml(msg.from) + '</div>' : '') +
     bubblesHtml +
+    (_tv ? _tv.link : '') +
     (msg.edited ? '<div class="msg-meta"><span>수정됨</span></div>' : '') +
     '</div>' +
   '</div>';
@@ -8340,8 +8826,7 @@ function buildGroupPrompt(gid) {
     'Chat history and previous narrative are REFERENCE ONLY for character context.\n' +
     'The output structure here is COMPLETELY DIFFERENT from the main story.\n\n' +
     _isolatedCtxBlock(null) +
-    '\u26A0\uFE0F LANGUAGE RULE: Follow the SAME LANGUAGE the user is writing in.\n' +
-    'If the user writes in English, respond in English. If Korean, respond in Korean.\n\n' +
+    _kpOutLangRule() + '\n' +
     '\u26D4 ABSOLUTELY FORBIDDEN (any single violation = failure):\n' +
     '- <status> tags, status windows (Name=, Date=, Caste= etc.)\n' +
     '- <choices> tags, choice options\n' +
@@ -8820,7 +9305,7 @@ async function _twGenRepliesForUser(tw) {
     var prompt =
       '[📱 X(트위터) 답글 생성 — HIGHEST PRIORITY OVERRIDE]\n' +
       'The user just posted this tweet. Generate how RANDOM OTHER PEOPLE reply to it.\n' +
-      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
       'USER TWEET: ' + (tw.content || '') + '\n' +
       TW_TONE +
       _worldLocaleLine() +
@@ -8905,6 +9390,7 @@ function backTwList() {
 }
 function _rTwDetail(el, t) {
   var list = t.replyList || [];
+  var _trItems = [{ obj: t, field: 'content' }].concat(list.map(function (r) { return { obj: r, field: 'content' }; }));
   var replies = list.length ? list.map(function(r, i) {
     return '<div class="tw-reply">' +
         '<div class="tw-reply-av">' + renderAvatar(r.name, 34, 'ct-av') + '</div>' +
@@ -8914,7 +9400,7 @@ function _rTwDetail(el, t) {
             (r.verified ? '<i class="fas fa-circle-check tw-verified"></i>' : '') +
             '<span class="tw-reply-handle">' + escapeHtml(r.handle || '') + '</span>' +
           '</div>' +
-          '<div class="tw-reply-text">' + escapeHtml(r.content) + '</div>' +
+          '<div class="tw-reply-text">' + escapeHtml(_kpTrTxt('twitter', r)) + '</div>' +
           '<div class="tw-reply-actions">' +
             '<button class="tw-rlike' + (r.liked ? ' on' : '') + '" onclick="toggleReplyLike(\'' + safeJs(t.id) + '\',' + i + ',this)"><i class="' + (r.liked ? 'fas' : 'far') + ' fa-heart"></i><span>' + (r.likes || 0) + '</span></button>' +
           '</div>' +
@@ -8927,6 +9413,7 @@ function _rTwDetail(el, t) {
     '<div class="s-header">' +
       '<button class="btn-icon" onclick="backTwList()"><i class="fas fa-chevron-left"></i></button>' +
       '<h2 style="font-size:16px"><i class="fab fa-x-twitter" style="margin-right:6px"></i>게시물</h2>' +
+      _kpTrFeedBtn('twitter') +
       '<button class="btn-icon" onclick="deleteTweet(\'' + safeJs(t.id) + '\')" title="삭제"><i class="fas fa-trash-can"></i></button>' +
     '</div>' +
     '<div class="s-body">' +
@@ -8938,7 +9425,7 @@ function _rTwDetail(el, t) {
             '<div class="tw-d-handle">' + escapeHtml(t.handle || '') + '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="tw-d-text">' + escapeHtml(t.content) + '</div>' +
+        '<div class="tw-d-text">' + escapeHtml(_kpTrTxt('twitter', t)) + '</div>' +
         '<div class="tw-d-time">' + _twTimeLabel(t.ts) + '</div>' +
         '<div class="tw-d-stats">' +
           '<span><b>' + _twNum(t.retweets || 0) + '</b> 리트윗</span>' +
@@ -8953,6 +9440,7 @@ function _rTwDetail(el, t) {
       '<div class="tw-d-replybar">답글 ' + _twNum(t.replies || 0) + '</div>' +
       '<div class="tw-d-replies">' + replies + '</div>' +
     '</div>';
+  _kpTrFeedAuto('twitter', _trItems);
 }
 function toggleLike(id, btn) {
   var t = _twFind(id);
@@ -9020,7 +9508,7 @@ function rTwitter(el) {
               '<span class="tw-dot">·</span>' +
               '<span class="tw-time">' + _twTimeLabel(t.ts) + '</span>' +
             '</div>' +
-            '<div class="tw-text">' + escapeHtml(t.content) + '</div>' +
+            '<div class="tw-text">' + escapeHtml(_kpTrTxt('twitter', t)) + '</div>' +
             '<div class="tw-actions">' +
               '<button class="tw-act" onclick="event.stopPropagation();openTweet(\'' + safeJs(t.id) + '\')"><i class="far fa-comment"></i><span>' + _twNum(t.replies || 0) + '</span></button>' +
               '<button class="tw-act tw-rt' + (t.retweeted ? ' on' : '') + '" onclick="event.stopPropagation();toggleRetweet(\'' + safeJs(t.id) + '\',this)"><i class="fas fa-retweet"></i><span>' + _twNum(t.retweets || 0) + '</span></button>' +
@@ -9036,6 +9524,7 @@ function rTwitter(el) {
       '<button class="btn-icon" onclick="nav(\'home\')"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="fab fa-x-twitter"></i></h2>' +
       '<button class="btn-icon tw-hdr-me" onclick="showTwProfileModal()" title="내 트위터 프로필 (닉네임·아이디)">' + _userTwAvatar(30) + '</button>' +
+      _kpTrFeedBtn('twitter') +
       '<button class="btn-icon" onclick="showTwInterests()" title="관심 태그/주제"><i class="fas fa-hashtag"></i></button>' +
       '<button class="btn-icon" onclick="showTweetCompose()" title="트윗 작성"><i class="fas fa-feather-pointed"></i></button>' +
       '<button class="btn-icon" id="tw-refresh-btn" ' + (_twRefreshing ? 'disabled' : '') + ' onclick="refreshTwitterFeed()" title="피드 새로고침"><i class="fas fa-rotate' + (_twRefreshing ? ' fa-spin' : '') + '"></i></button>' +
@@ -9043,7 +9532,9 @@ function rTwitter(el) {
     '<div class="s-body">' +
       '<div class="tw-feed">' + feed + '</div>' +
     '</div>';
+  _kpTrFeedAuto('twitter', tweets.map(function (x) { return { obj: x, field: 'content' }; }));
 }
+_KP_TR_RENDER.twitter = rTwitter;
 
 // AI 응답에서 받은 raw 텍스트 → 트윗 배열 파싱
 function _twParseTweets(raw) {
@@ -9127,6 +9618,21 @@ var PHONE_LANGS = {
   ja: { label: '日本語',  name: 'Japanese' },
   zh: { label: '中文',    name: 'Chinese (Simplified)' }
 };
+// 폰 출력 언어(설정 > 세계관 > 출력 언어) — 모든 생성(문자·통화·단톡·SNS·댓글·라이브)에 고정 적용.
+// 유저가 어떤 언어로 입력하든, 메인 채팅이 어떤 언어든 이 언어로만 출력한다. 채팅·스토리는 내용만 참고.
+function _kpOutLangName() {
+  var l = phoneData && phoneData.settings && phoneData.settings.lang;
+  return (PHONE_LANGS[l] || PHONE_LANGS.ko).name;
+}
+function _kpOutLangInline() {
+  return 'Write ONLY in ' + _kpOutLangName() + ' (fixed phone language setting — ignore the language of the user\'s input and of the chat/story).';
+}
+function _kpOutLangRule() {
+  var L = _kpOutLangName();
+  return '\u26A0\uFE0F OUTPUT LANGUAGE (FIXED BY THE PHONE SETTING — HIGHEST PRIORITY): write EVERYTHING you generate in ' + L + '. ' +
+    'This does NOT change with the language the user types in, nor with the language of the roleplay/chat history — even if they are in another language, reply in ' + L + '. ' +
+    'Use the chat/story only for its CONTENT, never to choose the language.\n';
+}
 // 모든 SNS 생성 프롬프트에 공통으로 끼워넣는 1블록 (자동이면 빈 문자열 → 현행 유지)
 function _worldLocaleLine(focusName) {
   var s = phoneData.settings || {};
@@ -9216,7 +9722,7 @@ async function refreshTwitterFeed() {
     'You are generating an X / Twitter timeline showing how the GENERAL PUBLIC is reacting to what is happening in the story RIGHT NOW.\n' +
     'This instruction COMPLETELY OVERRIDES all previous output format rules. Chat history is REFERENCE ONLY (for what the public is reacting to).\n\n' +
     '\u26D4 ABSOLUTELY FORBIDDEN: <status> tags, <choices>, <UpdateVariable>, <Analysis>, prose/narration outside tweets, affection/variable updates, any HTML/markup.\n\n' +
-    '\u26A0\uFE0F LANGUAGE: Follow the SAME LANGUAGE the user writes in (Korean\u2192Korean, English\u2192English).\n\n' +
+    _kpOutLangRule() + '\n' +
     '## WHO IS POSTING\n' +
     '- These are mostly ANONYMOUS, ORDINARY netizens / bystanders / online users reacting to the current situation, event, or person in the story \u2014 NOT the main characters.\n' +
     '- Think: random members of the public, fans, haters, gossip accounts, bored people, witnesses, commentators. Each is a DIFFERENT random person.\n' +
@@ -9544,12 +10050,20 @@ function rInsta(el) {
     '<div class="s-header">' +
       '<button class="btn-icon" onclick="nav(\'home\')"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="fab fa-instagram"></i> Instagram</h2>' +
+      _kpTrFeedBtn('insta') +
       '<button class="btn-icon tw-hdr-me" onclick="setInstaView(\'profile\')" title="내 프로필">' + _kpMyAvatar(30) + '</button>' +
       '<button class="btn-icon" onclick="showInstaCompose()" title="새 게시물"><i class="fas fa-plus"></i></button>' +
       '<button class="btn-icon" id="insta-refresh-btn" ' + (_instaRefreshing ? 'disabled' : '') + ' onclick="refreshInstaFeed()" title="피드 새로고침"><i class="fas fa-rotate' + (_instaRefreshing ? ' fa-spin' : '') + '"></i></button>' +
     '</div>' +
     '<div class="s-body">' + tabs + body + '</div>';
+  var _trI = [];
+  if (_instaView === 'feed') posts.forEach(function (p) {
+    _trI.push({ obj: p, field: 'caption' });
+    (p.comments || []).forEach(function (c) { _trI.push({ obj: c, field: 'text' }); });
+  });
+  _kpTrFeedAuto('insta', _trI);
 }
+_KP_TR_RENDER.insta = rInsta;
 function setInstaView(v) {
   _instaView = (v === 'grid') ? 'grid' : (v === 'profile' ? 'profile' : 'feed');
   rInsta(_kpEl('screen'));
@@ -9635,7 +10149,7 @@ function _instaPostHtml(p) {
   var capHtml = '';
   if (p.caption && !isTextPost) {
     var capLong = p.caption.length > 70;
-    capHtml = '<div class="ig-caption' + (capLong ? ' ig-clamp' : '') + '" id="ig-cap-' + p.id + '"><b>' + escapeHtml(aName) + '</b> ' + escapeHtml(p.caption) + '</div>' +
+    capHtml = '<div class="ig-caption' + (capLong ? ' ig-clamp' : '') + '" id="ig-cap-' + p.id + '"><b>' + escapeHtml(aName) + '</b> ' + escapeHtml(_kpTrTxt('insta', p, 'caption')) + '</div>' +
       (capLong ? '<div class="ig-more" id="ig-more-' + p.id + '" onclick="toggleInstaCaption(\'' + safeJs(p.id) + '\')">더 보기</div>' : '');
   }
   // 유저가 올린 실제 사진(data: URL + sdPrompt 없음)은 재생성하면 원본이 소실됨 → 리롤 대신 'AI 인식 보기/수정'만(메시지와 동일)
@@ -9660,7 +10174,7 @@ function _instaPostHtml(p) {
         ? '<div class="ig-img"><img src="' + escapeHtml(p.imgUrl) + '" loading="lazy"></div>'
         : (p.imgPending
             ? '<div class="ig-img ig-img-empty"><div class="spinner"></div><span>이미지 생성 중...</span></div>'
-            : (isTextPost ? '<div class="ig-img ig-img-text"><div class="ig-textcard">' + escapeHtml(p.caption) + '</div></div>' : ''))) +
+            : (isTextPost ? '<div class="ig-img ig-img-text"><div class="ig-textcard">' + escapeHtml(_kpTrTxt('insta', p, 'caption')) + '</div></div>' : ''))) +
       '<div class="ig-actions">' +
         '<button class="ig-act ig-like' + (p.liked ? ' on' : '') + '" onclick="toggleInstaLike(\'' + safeJs(p.id) + '\',this)"><i class="' + (p.liked ? 'fas' : 'far') + ' fa-heart"></i></button>' +
         (rightBtns ? '<span class="ig-act-spacer"></span>' + rightBtns : '') +
@@ -9708,7 +10222,7 @@ function _instaCommentsHtml(p) {
   var inner = cs.map(function(c, i) {
     return '<div class="ig-comment">' +
         '<span class="ig-cname">' + escapeHtml(c.name) + '</span>' +
-        '<span class="ig-ctext">' + escapeHtml(c.text) + '</span>' +
+        '<span class="ig-ctext">' + escapeHtml(_kpTrTxt('insta', c, 'text')) + '</span>' +
         '<button class="ig-clike' + (c.liked ? ' on' : '') + '" onclick="toggleInstaCommentLike(\'' + safeJs(p.id) + '\',' + i + ',this)"><i class="' + (c.liked ? 'fas' : 'far') + ' fa-heart"></i><span>' + (c.likes || 0) + '</span></button>' +
       '</div>';
   }).join('');
@@ -9845,7 +10359,7 @@ async function _instaGenComments(post) {
     var prompt =
       '[📷 INSTAGRAM PUBLIC COMMENTS — HIGHEST PRIORITY OVERRIDE]\n' +
       'Generate ordinary people\'s comments on an Instagram post by ' + who + '.\n' +
-      'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the SAME LANGUAGE the user writes in.\n' +
+      'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
       'POST CAPTION: ' + (post.caption || '(none)') + '\n' +
       'POST IMAGE: ' + (post.desc || post.caption || 'a photo') + '\n\n' +
       'RULES:\n' +
@@ -9916,7 +10430,7 @@ async function refreshInstaFeed() {
   var prompt =
     '[📷 INSTAGRAM FEED — HIGHEST PRIORITY OVERRIDE]\n' +
     'Generate Instagram posts made by CHARACTERS or OFFICIAL / PUBLIC accounts (brand, press, agency, celebrity) in this world. Ordinary anonymous people do NOT post here — they only comment.\n' +
-    'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the SAME LANGUAGE the user writes in.\n' +
+    'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
     knownLine +
     _worldLocaleLine() +
     _snsFocusLine() +
@@ -10080,6 +10594,7 @@ function _rOfPage(el, of) {
       '<button class="btn-icon" onclick="showOfList()" title="계정 목록"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="fas fa-dollar-sign" style="color:#00aff0"></i> OnlyFans</h2>' +
       // ✎ 계정 수정(이름·포지션·내계정) — 생성 후에도 언제든 바꿀 수 있게(유저 요청). ⚙ 생성 지침은 모든 계정 공통.
+      _kpTrFeedBtn('onlyfans') +
       '<button class="btn-icon" onclick="editOfCreator(\'' + safeJs(of.id) + '\')" title="계정 수정 (이름·포지션)"><i class="fas fa-user-pen"></i></button>' +
       '<button class="btn-icon" onclick="showOfPromptSettings()" title="온팬 생성 지침 (수위·내용 편집 · 모든 계정 공통)"><i class="fas fa-gear"></i></button>' +
       (mine
@@ -10096,7 +10611,7 @@ function _rOfPage(el, of) {
             '<div class="of-prof-handle">@' + escapeHtml(of.handle || _ofHandle(of.creator)) + '</div>' +
           '</div>' +
         '</div>' +
-        (of.bio ? '<div class="of-bio">' + escapeHtml(of.bio) + '</div>' : '') +
+        (of.bio ? '<div class="of-bio">' + escapeHtml(_kpTrTxt('onlyfans', of, 'bio')) + '</div>' : '') +
         '<div class="of-stats"><span><b>' + posts.length + '</b> 게시물</span><span><b>' + _twNum(of.subscribers || 0) + '</b> 구독자</span>' + (of.tipTotal ? '<span>💸 ' + _curSym() + '<b>' + _twNum(of.tipTotal) + '</b></span>' : '') + '</div>' +
         '<div class="of-actions">' +
           (mine
@@ -10109,6 +10624,12 @@ function _rOfPage(el, of) {
       '</div>' +
       '<div class="of-feed">' + feed + '</div>' +
     '</div>';
+  var _trO = [{ obj: of, field: 'bio' }];
+  (of.posts || []).forEach(function (p) {
+    _trO.push({ obj: p, field: 'caption' });
+    (p.comments || []).forEach(function (c) { _trO.push({ obj: c, field: 'text' }); });
+  });
+  _kpTrFeedAuto('onlyfans', _trO);
 }
 function _ofLockOverlay(p) {
   if (p.lock === 'ppv') return '<div class="of-lock"><i class="fas fa-lock"></i><div>유료 콘텐츠</div><button class="of-unlock" onclick="confirmUnlockOf(\'' + safeJs(p.id) + '\')">' + _money(p.price) + ' 잠금 해제</button></div>';
@@ -10123,7 +10644,7 @@ function _ofPostHtml(p, of) {
   if (p.imgUrl) imgBlock = '<div class="of-img' + (locked ? ' locked' : '') + '"><img src="' + escapeHtml(p.imgUrl) + '" loading="lazy">' + (locked ? _ofLockOverlay(p) : '') + '</div>';
   else if (p.imgPending) imgBlock = '<div class="of-img of-img-empty"><div class="spinner"></div><span>이미지 생성 중...</span></div>';
   else if (locked) imgBlock = '<div class="of-img of-img-empty locked">' + _ofLockOverlay(p) + '</div>';
-  else if (isTextPost) imgBlock = '<div class="of-img of-img-text"><div class="of-textcard">' + escapeHtml(p.caption) + '</div></div>';
+  else if (isTextPost) imgBlock = '<div class="of-img of-img-text"><div class="of-textcard">' + escapeHtml(_kpTrTxt('onlyfans', p, 'caption')) + '</div></div>';
   return '<div class="of-post">' +
       '<div class="of-post-head">' +
         '<div class="of-pa">' + (of.isMine ? _kpMyAvatar(30, 'ct-av') : renderAvatar(of.creator, 30, 'ct-av')) + '</div>' +
@@ -10144,7 +10665,7 @@ function _ofPostHtml(p, of) {
       '<div class="ig-likes">좋아요 ' + _twNum(p.likes || 0) + '개</div>' +
       (locked ? '<div class="of-lock-tag">🔒 ' + (p.lock === 'ppv' ? '유료 콘텐츠 · 사진 잠김' : '구독자 전용 · 사진 잠김') + '</div>' : '') +
       (of.isMine && p.lock && p.lock !== 'free' ? '<div class="of-lock-tag">' + (p.lock === 'ppv' ? '💰 유료 ' + _money(p.price) + ' · 구독자에게 잠금' : '🔒 구독자 전용') + '</div>' : '') +
-      (p.caption && !isTextPost ? '<div class="of-caption">' + escapeHtml(p.caption) + '</div>' : '') +
+      (p.caption && !isTextPost ? '<div class="of-caption">' + escapeHtml(_kpTrTxt('onlyfans', p, 'caption')) + '</div>' : '') +
       _ofCommentsHtml(p) +
       (p.commentsPending ? '<div class="kp-cmt-pending"><div class="spinner"></div>팬 댓글 달리는 중...</div>' : '') +
     '</div>';
@@ -10155,7 +10676,7 @@ function _ofCommentsHtml(p) {
   var inner = cs.map(function(c) {
     return '<div class="ofc">' +
         '<div class="ofc-av">' + renderAvatar(c.name, 28, 'ct-av') + '</div>' +
-        '<div class="ofc-body"><div class="ofc-name">' + escapeHtml(c.name) + '</div><div class="ofc-text">' + escapeHtml(c.text) + '</div></div>' +
+        '<div class="ofc-body"><div class="ofc-name">' + escapeHtml(c.name) + '</div><div class="ofc-text">' + escapeHtml(_kpTrTxt('onlyfans', c, 'text')) + '</div></div>' +
       '</div>';
   }).join('');
   return '<div class="of-cmthead">댓글 ' + cs.length + '개</div><div class="of-comments">' + inner + '</div>';
@@ -10342,7 +10863,7 @@ async function _ofGenMineComments(post) {
     var prompt =
       '[🔞 OnlyFans 구독자 댓글 — HIGHEST PRIORITY OVERRIDE]\n' +
       'The phone owner (the user) just posted on THEIR OWN OnlyFans page as creator "' + of.creator + '". Generate comments from their devoted PAYING subscribers/fans.\n' +
-      'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+      'This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
       'The post caption: "' + String(post.caption || post.desc || '').slice(0, 200) + '". Lock: ' + post.lock + '.\n' +
       _worldLocaleLine() +
       'Fans are parasocial, generous simps: "이거 보려고 구독함", "여신…", "ppv 바로 질렀다", "월급 다 바칠게". Keep each SHORT, 1 line, varied unique nicknames.\n' +
@@ -10447,6 +10968,7 @@ function clearOfLedger() {
   showToast('지출 내역을 비웠어요');
 }
 // 스크롤 위치 유지하며 OnlyFans 재렌더(잠금해제 시 맨 위로 튀는 것 방지)
+_KP_TR_RENDER.onlyfans = rOnlyFans;
 function _rOfKeepScroll() {
   var sb = _kpQ('#kkang_phone-root .s-body');
   var top = sb ? sb.scrollTop : 0;
@@ -10577,7 +11099,7 @@ async function _ofGenTipReaction(amount, message, postId) {
       '[🔞 OnlyFans 후원 반응 — HIGHEST PRIORITY OVERRIDE]\n' +
       'The user just tipped ' + _curSym() + amount + ' to the adult content creator "' + of.creator + '" (a fictional adult character). ' +
       ctxLine + msgLine +
-      'Write the creator\'s SHORT thank-you message (1-2 sentences). ★ It MUST be 100% in THIS character\'s authentic speech style, tone, formality and personality from the conversation — if they are cold/formal/reserved, keep that (restrained, subtly charged), do NOT make them generically crude or horny. Follow the user\'s language. NO markup, NO narration, plain text only.\n';
+      'Write the creator\'s SHORT thank-you message (1-2 sentences). ★ It MUST be 100% in THIS character\'s authentic speech style, tone, formality and personality from the conversation — if they are cold/formal/reserved, keep that (restrained, subtly charged), do NOT make them generically crude or horny. ' + _kpOutLangInline() + ' NO markup, NO narration, plain text only.\n';
     await disableFormatRules();
     var raw;
     try { raw = await generateWithTimeout({ user_input: prompt, should_stream: false }, 300000); }
@@ -10631,7 +11153,7 @@ async function refreshOfFeed() {
   var prompt =
     '[🔞 ONLYFANS PAGE — HIGHEST PRIORITY OVERRIDE]\n' +
     'Generate the OnlyFans page of creator "' + of.creator + '". This is NOT Instagram or Twitter — it is a PAID, PRIVATE, 18+ ADULT space where the creator posts EXCLUSIVE, EXPLICIT content ONLY for their paying subscribers. It is meant to be far more explicit and sexual than Instagram — that paywalled explicitness is the whole point.\n' +
-    'ALL characters are fictional ADULTS (18+). This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+    'ALL characters are fictional ADULTS (18+). This COMPLETELY OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
     'Base the creator\'s persona, look, and world STRICTLY on the CURRENT conversation context. Never invent unrelated franchises.\n' +
     _worldLocaleLine(of.creator) + // 이 크리에이터 1명 시트만 주입(전 인물 X — 토큰 절약)
     guide + '\n' +
@@ -11039,7 +11561,7 @@ function _rLiveWatch(el, live) {
   var chatLines = (live.chat || []).map(function(c) {
     return '<div class="live-chat-line' + (c.streamer ? ' streamer' : '') + (c.donation ? ' donation' : '') + (c.me ? ' me' : '') + '">' +
       '<span class="live-chat-name">' + escapeHtml(_liveShowName(c.name)) + (c.streamer ? ' <i class="fas fa-certificate"></i>' : '') + '</span>' +
-      '<span class="live-chat-text">' + escapeHtml(c.text) + '</span>' +
+      '<span class="live-chat-text">' + escapeHtml(_kpTrTxt('live', c, 'text')) + '</span>' +
     '</div>';
   }).join('');
   var chatHtml = _liveRefreshing ? (chatLines + loading) : (chatLines || empty);
@@ -11047,7 +11569,7 @@ function _rLiveWatch(el, live) {
   var ytLines = (live.chat || []).map(function(c) {
     return '<div class="ytlive-msg' + (c.streamer ? ' streamer' : '') + (c.donation ? ' donation' : '') + (c.me ? ' me' : '') + '">' +
       '<div class="ytlive-msg-av">' + renderAvatar(_liveShowName(c.name), 22, 'ct-av') + '</div>' +
-      '<div class="ytlive-msg-body"><span class="ytlive-msg-name">' + escapeHtml(_liveShowName(c.name)) + '</span> <span class="ytlive-msg-text">' + escapeHtml(c.text) + '</span></div>' +
+      '<div class="ytlive-msg-body"><span class="ytlive-msg-name">' + escapeHtml(_liveShowName(c.name)) + '</span> <span class="ytlive-msg-text">' + escapeHtml(_kpTrTxt('live', c, 'text')) + '</span></div>' +
     '</div>';
   }).join('');
   var ytChatHtml = _liveRefreshing ? (ytLines + loading) : (ytLines || empty);
@@ -11056,6 +11578,7 @@ function _rLiveWatch(el, live) {
     '<div class="s-header live-head">' +
       '<button class="btn-icon" onclick="showLiveList()" title="방송 목록"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="' + plat.icon + '"></i> ' + escapeHtml(plat.name) + '</h2>' +
+      _kpTrFeedBtn('live') +
       '<button class="btn-icon tw-hdr-me" onclick="showLiveNickModal()" title="내 방송 닉네임">' + _userTwAvatar(24) + '</button>' +
       '<button class="btn-icon" onclick="showLiveSetup()" title="방송 설정"><i class="fas fa-user-gear"></i></button>' +
       (live.ended
@@ -11154,7 +11677,9 @@ function _rLiveWatch(el, live) {
   el.innerHTML = header + body;
   setTimeout(function() { var cb = _kpEl('live-chat-box'); if (cb) cb.scrollTop = cb.scrollHeight; }, 40);
   _startLiveViewerJitter();
+  _kpTrFeedAuto('live', (live.chat || []).map(function (c) { return { obj: c, field: 'text' }; }));
 }
+_KP_TR_RENDER.live = rLive;
 function showLiveSetup() {
   var live = _liveGet();
   var platBtns = Object.keys(LIVE_PLATFORMS).map(function(k) {
@@ -11315,7 +11840,7 @@ async function _liveGenTitle(id) {
   try {
     var prompt =
       '[라이브 방송 제목 — HIGHEST PRIORITY OVERRIDE]\n' +
-      'Write ONE short, catchy live-stream title for ' + plat.name + ', as the host(s) would actually title it. Follow the user\'s language. This OVERRIDES all output format rules. NO markup/narration.\n' +
+      'Write ONE short, catchy live-stream title for ' + plat.name + ', as the host(s) would actually title it. ' + _kpOutLangInline() + ' This OVERRIDES all output format rules. NO markup/narration.\n' +
       (collab
         ? 'COLLAB (합방) of TWO hosts: "' + live.streamer + '" and "' + live.cohost + '". Reflect BOTH and their real relationship/dynamic from the conversation NATURALLY. Do NOT use a generic "A ❤ B" pattern.\n'
         : 'Host: "' + live.streamer + '".\n') +
@@ -11358,7 +11883,7 @@ async function endLiveBroadcast(id) {
       var collab = _liveIsCollab(live);
       var prompt =
         '[🎥 방송 종료 인사 — HIGHEST PRIORITY OVERRIDE]\n' +
-        'The live broadcast is ENDING now. Write the host\'s SHORT closing/sign-off line(s) to chat, in their authentic character voice from the conversation. Follow the user\'s language. NO markup/narration.\n' +
+        'The live broadcast is ENDING now. Write the host\'s SHORT closing/sign-off line(s) to chat, in their authentic character voice from the conversation. ' + _kpOutLangInline() + ' NO markup/narration.\n' +
         (collab ? 'Collab hosts: "' + live.streamer + '" & "' + live.cohost + '" — one short line each is fine.\n' : 'Host: "' + live.streamer + '".\n') +
         _worldLocaleLine(live.streamer) +
         'OUTPUT — ONLY a raw JSON array:\n[{"name":"host name","text":"sign-off line"}]\n[BEGIN JSON]\n';
@@ -11590,7 +12115,7 @@ async function refreshLiveChat(donationAmount, userMsg, directorCue) {
     '[🎥 LIVE STREAM CHAT — HIGHEST PRIORITY OVERRIDE]\n' +
     'Generate a fast-scrolling live-stream chat for ' + plat.name + '. ' + (collab ? 'Hosts (collab): "' + live.streamer + '" & "' + live.cohost + '"' : 'Streamer: "' + live.streamer + '"') + (live.title ? ', stream title: "' + live.title + '"' : '') + (conceptLabel ? ', concept: "' + conceptLabel + '"' : '') + '.\n' +
     (live.detail ? '★ What is happening in THIS broadcast (reflect it in host lines and viewer reactions): "' + live.detail + '".\n' : '') +
-    'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+    'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
     fameNote + '\n' +
     collabNote +
     secretNote +
@@ -11918,6 +12443,7 @@ function rCommunity(el, app) {
     '<div class="s-header comm-head comm-' + app + '">' +
       '<button class="btn-icon" onclick="nav(\'home\')"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="' + cfg.icon + '"></i> ' + escapeHtml(cfg.label) + '</h2>' +
+      _kpTrFeedBtn(app) +
       '<button class="btn-icon" onclick="showCommCompose(\'' + app + '\')" title="글쓰기"><i class="fas fa-pen-to-square"></i></button>' +
       '<button class="btn-icon" ' + (_commRefreshing ? 'disabled' : '') + ' onclick="refreshCommunity(\'' + app + '\')" title="새로고침"><i class="fas fa-rotate' + (_commRefreshing ? ' fa-spin' : '') + '"></i></button>' +
     '</div>' +
@@ -11925,7 +12451,12 @@ function rCommunity(el, app) {
       '<div class="comm-tabs">' + tabs + '</div>' +
       '<div class="comm-list">' + list + '</div>' +
     '</div>';
+  var _trC = [];
+  posts.forEach(function (p) { _trC.push({ obj: p, field: 'title' }, { obj: p, field: 'content' }); });
+  _kpTrFeedAuto(app, _trC);
 }
+_KP_TR_RENDER.blind = function (el) { rCommunity(el, 'blind'); };
+_KP_TR_RENDER.everytime = function (el) { rCommunity(el, 'everytime'); };
 function _commAuthorLine(app, p) {
   var cfg = _commCfg(app);
   // cfg.anon 커스텀 익명 앱: 글쓴이는 항상 opLabel(내 글이면 meOpName). AI가 준 번호 닉은 무시.
@@ -11937,10 +12468,10 @@ function _commAuthorLine(app, p) {
   return a;
 }
 function _commFeedCard(app, p, cfg) {
-  var snip = (p.content || '').replace(/\s+/g, ' ').trim();
+  var snip = (_kpTrTxt(app, p, 'content') || '').replace(/\s+/g, ' ').trim();
   var clipped = snip.length > 90 ? snip.slice(0, 90) + '…' : snip;
   return '<div class="comm-card" onclick="openCommPost(\'' + app + '\',\'' + safeJs(p.id) + '\')">' +
-      (p.title ? '<div class="comm-card-title">' + escapeHtml(p.title) + '</div>' : '') +
+      (p.title ? '<div class="comm-card-title">' + escapeHtml(_kpTrTxt(app, p, 'title')) + '</div>' : '') +
       (clipped ? '<div class="comm-card-snip">' + escapeHtml(clipped) + '</div>' : '') +
       '<div class="comm-card-meta">' +
         '<span class="comm-card-auth">' + _commAuthorLine(app, p) + '</span>' +
@@ -11988,7 +12519,7 @@ function _rCommDetail(el, app, p, cfg) {
           '<span class="comm-cmt-name">' + escapeHtml(nm) + '</span>' +
           '<span class="comm-cmt-time">' + _twTimeLabel(c.ts) + '</span>' +
         '</div>' +
-        '<div class="comm-cmt-text">' + escapeHtml(c.text) + '</div>' +
+        '<div class="comm-cmt-text">' + escapeHtml(_kpTrTxt(app, c, 'text')) + '</div>' +
         '<div class="comm-cmt-acts">' +
           '<button class="comm-cmt-like' + (c.liked ? ' on' : '') + '" onclick="toggleCommCmtLike(\'' + app + '\',\'' + safeJs(p.id) + '\',' + i + ',this)"><i class="' + (c.liked ? 'fas' : 'far') + ' fa-heart"></i> <span>' + (c.likes || 0) + '</span></button>' +
           '<button class="comm-cmt-reply" onclick="startCommReply(\'' + app + '\',\'' + safeJs(p.id) + '\',' + i + ')"><i class="far fa-comment"></i> 답글</button>' +
@@ -12002,7 +12533,7 @@ function _rCommDetail(el, app, p, cfg) {
             '<span class="comm-cmt-name">' + escapeHtml(rnm) + '</span>' +
             '<span class="comm-cmt-time">' + _twTimeLabel(r.ts) + '</span>' +
           '</div>' +
-          '<div class="comm-cmt-text">' + escapeHtml(r.text) + '</div>' +
+          '<div class="comm-cmt-text">' + escapeHtml(_kpTrTxt(app, r, 'text')) + '</div>' +
           '<button class="comm-cmt-like' + (r.liked ? ' on' : '') + '" onclick="toggleCommReplyLike(\'' + app + '\',\'' + safeJs(p.id) + '\',' + i + ',' + ri + ',this)"><i class="' + (r.liked ? 'fas' : 'far') + ' fa-heart"></i> <span>' + (r.likes || 0) + '</span></button>' +
         '</div>');
     });
@@ -12015,14 +12546,15 @@ function _rCommDetail(el, app, p, cfg) {
     '<div class="s-header comm-head comm-' + app + '">' +
       '<button class="btn-icon" onclick="backCommList(\'' + app + '\')"><i class="fas fa-chevron-left"></i></button>' +
       '<h2><i class="' + cfg.icon + '"></i> ' + escapeHtml(_commBoardLabel(app, p.board)) + '</h2>' +
+      _kpTrFeedBtn(app) +
       '<button class="btn-icon" onclick="deleteCommPost(\'' + app + '\',\'' + safeJs(p.id) + '\')" title="삭제"><i class="fas fa-trash-can"></i></button>' +
     '</div>' +
     '<div class="s-body comm-detail-body comm-' + app + '">' +
       '<div class="comm-scroll">' +
         '<div class="comm-detail">' +
           '<div class="comm-d-auth">' + _commAuthorLine(app, p) + '</div>' +
-          (p.title ? '<div class="comm-d-title">' + escapeHtml(p.title) + '</div>' : '') +
-          '<div class="comm-d-content">' + escapeHtml(p.content || '').replace(/\n/g, '<br>') + '</div>' +
+          (p.title ? '<div class="comm-d-title">' + escapeHtml(_kpTrTxt(app, p, 'title')) + '</div>' : '') +
+          '<div class="comm-d-content">' + escapeHtml(_kpTrTxt(app, p, 'content') || '').replace(/\n/g, '<br>') + '</div>' +
           '<div class="comm-d-time">' + _twTimeLabel(p.ts) + ' · 조회 ' + _twNum(p.views || 0) + '</div>' +
           '<div class="comm-d-actions">' +
             '<button class="comm-d-like' + (p.liked ? ' on' : '') + '" onclick="toggleCommLike(\'' + app + '\',\'' + safeJs(p.id) + '\',this)"><i class="' + (p.liked ? 'fas' : 'far') + ' fa-heart"></i> <span>' + _twNum(p.likes || 0) + '</span></button>' +
@@ -12042,6 +12574,12 @@ function _rCommDetail(el, app, p, cfg) {
         '</div>' +
       '</div>' +
     '</div>';
+  var _trD = [{ obj: p, field: 'title' }, { obj: p, field: 'content' }];
+  (p.comments || []).forEach(function (c) {
+    _trD.push({ obj: c, field: 'text' });
+    (c.replies || []).forEach(function (r) { _trD.push({ obj: r, field: 'text' }); });
+  });
+  _kpTrFeedAuto(app, _trD);
 }
 function setCommBoard(app, key) {
   _commStore(app).board = key;
@@ -12139,7 +12677,7 @@ async function _commGenComments(app, post) {
     var prompt =
       '[📱 익명 커뮤니티 댓글 생성 — HIGHEST PRIORITY OVERRIDE]\n' +
       'A user just posted on the "' + cfg.name + '" anonymous community. Generate how OTHER anonymous members reply in the comments.\n' +
-      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
       _commStr(cfg.tone) +
       _worldLocaleLine() +
       'USER POST — board: "' + _commBoardLabel(app, post.board) + '", title: "' + (post.title || '') + '", body: "' + (post.content || '') + '"\n' +
@@ -12287,7 +12825,7 @@ async function _commGenReactions(app, postId, rootIdx, userText) {
     var prompt =
       '[📱 ' + cfg.name + ' 댓글 반응 생성 — HIGHEST PRIORITY OVERRIDE]\n' +
       'On a ' + cfg.name + ' anonymous community post, the USER just wrote a comment/reply. Generate how OTHER anonymous members react.\n' +
-      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. Follow the user\'s language.\n' +
+      'This OVERRIDES all output format rules. NO <status>, NO narration, NO markup. ' + _kpOutLangInline() + '\n' +
       _commStr(cfg.tone) +
       _worldLocaleLine() +
       'POST — title: "' + (p.title || '') + '", body: "' + String(p.content || '').slice(0, 300) + '"\n' +
@@ -12362,7 +12900,7 @@ async function refreshCommunity(app) {
     (cfg.feedIntro ? _commStr(cfg.feedIntro) : 'You are generating posts on the "' + cfg.name + '" anonymous community app, reflecting what people in the STORY WORLD are anonymously posting right now.') + '\n' +
     'This instruction COMPLETELY OVERRIDES all previous output format rules. Chat history is REFERENCE ONLY.\n\n' +
     '⛔ ABSOLUTELY FORBIDDEN: <status> tags, <choices>, <UpdateVariable>, <Analysis>, prose/narration outside posts, any HTML/markup.\n\n' +
-    '⚠️ LANGUAGE: Follow the SAME LANGUAGE the user writes in (Korean→Korean, English→English).\n' +
+    _kpOutLangRule() +
     _commStr(cfg.tone) +
     _worldLocaleLine() +
     framing +
@@ -12702,6 +13240,14 @@ function _kkangPhoneInit() {
   if (typeof kpWIPickAll !== 'undefined') window.kpWIPickAll = kpWIPickAll;
   if (typeof kpWISetMax !== 'undefined') window.kpWISetMax = kpWISetMax;
   if (typeof setMemorySetting !== 'undefined') window.setMemorySetting = setMemorySetting;
+  if (typeof kpTrToggle !== 'undefined') window.kpTrToggle = kpTrToggle;
+  if (typeof kpTrSet !== 'undefined') window.kpTrSet = kpTrSet;
+  if (typeof kpTrFeedToggle !== 'undefined') window.kpTrFeedToggle = kpTrFeedToggle;
+  if (typeof kpCallTrToggle !== 'undefined') window.kpCallTrToggle = kpCallTrToggle;
+  if (typeof kpCallLogTrToggle !== 'undefined') window.kpCallLogTrToggle = kpCallLogTrToggle;
+  if (typeof kpTrFeedRedo !== 'undefined') window.kpTrFeedRedo = kpTrFeedRedo;
+  if (typeof _kpTrFeedSwitch !== 'undefined') window._kpTrFeedSwitch = _kpTrFeedSwitch;
+  if (typeof setCtxMode !== 'undefined') window.setCtxMode = setCtxMode;
   if (typeof setProbSetting !== 'undefined') window.setProbSetting = setProbSetting;
   if (typeof importPackFromPicker !== 'undefined') window.importPackFromPicker = importPackFromPicker;
   if (typeof openStickerPackManager !== 'undefined') window.openStickerPackManager = openStickerPackManager;
