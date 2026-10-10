@@ -4296,7 +4296,7 @@ function rSettings(el) {
       statusHtml +
       tabBar +
       (tab === 'world' ? worldTab : (tab === 'deco' ? decoTab : (tab === 'msg' ? msgTab : generalTab))) +
-      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v2.0.0 · <u>🐞 디버그 로그</u></div></div>' +
+      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v2.1.0 · <u>🐞 디버그 로그</u></div></div>' +
     '</div>';
   try { _kpApplyMaskDOM(); } catch (e) {} // 텍스트 가리기 적용(설정 화면 자체도 — 규칙 편집칸은 data-nomask로 제외)
   if (tab === 'general' && phoneData.settings.useWorldInfo === true) _kpDrawWIPicker(); // 로어북 항목은 비동기로 채움
@@ -6460,6 +6460,27 @@ async function restoreFormatRules() {
   }
 }
 
+// 캐릭터가 보내는 사진 규칙(1:1·단톡 공통)
+//  · AI 이미지 생성 ON: [photo:영어 태그] → 외형 태그를 붙여 실제 이미지 생성
+//  · OFF: [photo:짧은 설명] → 이미지 없이 사진 카드(설명)로 표시
+//  · 공통 빈도: 드물게, 응답당 최대 1장, 보낼 만한 상황에서만(요청·보여주는 게 자연스러울 때·셀카가 어울릴 때)
+function _kpPhotoRule(isGroup) {
+  var freq =
+    '\uD83D\uDCF8 PHOTO FREQUENCY (STRICT): photos are RARE. Most replies have NO photo. Send AT MOST ONE photo per reply' + (isGroup ? ' (and at most one photo in the whole group burst)' : '') + ', and ONLY when it truly fits:\n' +
+    '  (1) the user asked for a photo / selfie / proof ("사진 보내줘", "인증해", "send a pic"), or\n' +
+    '  (2) showing is more natural than telling — an outfit, food, a view, where you are right now, something you just bought or saw, or\n' +
+    '  (3) a casual selfie clearly fits this character and the mood (playful, flirty, showing off).\n' +
+    '  Do NOT send photos in consecutive replies (if a photo was sent recently in the chat log, don\'t send another unless asked). Shy, cold, busy or serious characters almost never send selfies. Never send a photo just to fill the reply.\n';
+  if (phoneData.settings.imageGen) {
+    return '[photo:description] = sending a photo (a real image is generated). \u26A0\uFE0F PHOTO DESCRIPTION MUST be written as ENGLISH comma-separated tags for image generation.\n' +
+      'Do NOT include appearance details (hair, eyes, body, face, skin, gender) in the description. Your appearance tags are applied separately and automatically.\n' +
+      'Include ONLY: action/pose, background/location, clothing/outfit, expression, camera angle.\n' +
+      'Example: [photo:selfie, peace sign, library background, school uniform, smiling, front camera]\n' +
+      'Example: [photo:mirror selfie, gym locker room, winking, v-sign pose]\n' +
+      'Do NOT write descriptions in Korean or as sentences. Use English tags only.\n' + freq;
+  }
+  return '[photo:description] = sending a photo. Real images are OFF, so it appears as a photo card showing your description. Write ONE short phrase in ' + _kpOutLangName() + ' describing what the photo shows (who/what, where, pose/expression). Example: [photo:도서관 창가에서 찍은 셀카, 브이 하는 중]\n' + freq;
+}
 function buildOverrideHeader(name, mode) {
   var statusMsg = (phoneData && phoneData.settings && phoneData.settings.statusMessage) ? phoneData.settings.statusMessage : '';
   return '[\uD83D\uDCF1 SMARTPHONE ' + mode + ' MODE \u2014 HIGHEST PRIORITY OVERRIDE]\n' +
@@ -6488,7 +6509,7 @@ function buildOverrideHeader(name, mode) {
     : '') +
     (statusMsg ? "- The other person's profile status message: \"" + statusMsg + '" (reference only, do not mention directly)\n' : '') +
     '\n\uD83D\uDCCE Special message formats (the other person may also use these):\n' +
-    (phoneData.settings.imageGen ? '[photo:description] = sending a photo. \u26A0\uFE0F PHOTO DESCRIPTION MUST be written as ENGLISH comma-separated tags for image generation.\nDo NOT include appearance details (hair, eyes, body, face, skin, gender) in the description. Your appearance tags are applied separately and automatically.\nInclude ONLY: action/pose, background/location, clothing/outfit, expression, camera angle.\nExample: [photo:selfie, peace sign, library background, school uniform, smiling, front camera]\nExample: [photo:mirror selfie, gym locker room, winking, v-sign pose]\nDo NOT write descriptions in Korean or as sentences. Use English tags only.\n' : '\u26D4 Photo generation is DISABLED. Do NOT use [photo:description] format. Do NOT send photos.\n') +
+    _kpPhotoRule(false) +
     '[photo:<text>] from User = the user attached a REAL photo; <text> describes its actual recognized content. React to that content specifically — comment on it, ask about it. If <text> is just "사진"/"image", the content is unknown.\n' +
     '[location:place name] = sharing location\n' +
     '[gift:category:item_name] = sending a gifticon. category must be one of: coffee, dessert, bakery, food, chicken, store, icecream, movie, game. item_name must match exactly. Example: [gift:coffee:아메리카노 (HOT)], [gift:chicken:양념 치킨]\n' +
@@ -8884,7 +8905,7 @@ function buildGroupPrompt(gid) {
     '- When chatting in Korean, each character MUST naturally decide between formal speech (존댓말) and informal speech (반말) based on: (1) age/grade difference between characters (학년 차이), (2) each character\'s personality and attitude, (3) their relationship closeness. Upperclassmen/older characters typically receive 존댓말 from underclassmen/younger ones. Close friends of the same age may use 반말. Maintain consistency throughout the conversation.\n' +
     '- Emoji and line breaks allowed. No other formatting.\n' +
     '\n\uD83D\uDCCE Special message formats (members may also use these):\n' +
-    '[photo:description] = DO NOT use this format in group chats. Photo generation is disabled in group chats.\n' +
+    _kpPhotoRule(true) +
     '[photo:<text>] from User = the user attached a REAL photo; <text> describes its actual recognized content. React to that content specifically. If <text> is just "사진"/"image", the content is unknown.\n' +
     '[location:place name] = sharing location\n' +
     '[gift:category:item_name] = sending a gifticon. category must be one of: coffee, dessert, bakery, food, chicken, store, icecream, movie, game. item_name must match exactly. Example: [gift:coffee:아메리카노 (HOT)], [gift:chicken:양념 치킨]\n' +
