@@ -1911,3 +1911,10 @@
 #kkang_phone-root .call-sub-tr-btn.on{ color:var(--primary) !important; background:color-mix(in srgb,var(--primary) 14%,transparent); }
 #kkang_phone-root .call-subtitle-wrap .call-sub-tr-btn{ position:absolute; top:10px; right:46px; }
 #kkang_phone-root .kp-tr-redo i{ color:var(--text-sec) !important; font-size:14px; }
+
+/* ===== 월드인포: 로어북 여러 개 ===== */
+#kkang_phone-root .kp-wi-details + .kp-wi-details{ margin-top:6px; }
+#kkang_phone-root .kp-wi-bname{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#kkang_phone-root .kp-wi-bname em{ font-style:normal; font-weight:500; font-size:11.5px; color:var(--text-muted); margin-left:4px; }
+#kkang_phone-root .kp-wi-x{ border:none; background:none; padding:2px 6px; cursor:pointer; flex-shrink:0; }
+#kkang_phone-root .kp-wi-x i{ color:var(--text-muted) !important; }

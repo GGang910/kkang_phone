@@ -4296,7 +4296,7 @@ function rSettings(el) {
       statusHtml +
       tabBar +
       (tab === 'world' ? worldTab : (tab === 'deco' ? decoTab : (tab === 'msg' ? msgTab : generalTab))) +
-      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v2.1.0 · <u>🐞 디버그 로그</u></div></div>' +
+      '<div class="settings-item" style="justify-content:center;border:none;padding:20px" onclick="nav(\'debug-log\')"><div style="text-align:center;color:var(--text-muted);font-size:11px">📱 깡폰 v2.1.1 · <u>🐞 디버그 로그</u></div></div>' +
     '</div>';
   try { _kpApplyMaskDOM(); } catch (e) {} // 텍스트 가리기 적용(설정 화면 자체도 — 규칙 편집칸은 data-nomask로 제외)
   if (tab === 'general' && phoneData.settings.useWorldInfo === true) _kpDrawWIPicker(); // 로어북 항목은 비동기로 채움
@@ -5028,36 +5028,60 @@ function _isolatedCtxBlock(name) {
 var _kpWICache = { key: '', entries: null, loading: false };
 // 공백·대소문자·'= 한자/영문' 꼬리표·괄호를 제거한 비교용 정규화(이름↔키 매칭용)
 function _kpNorm(s) { return String(s == null ? '' : s).toLowerCase().replace(/[=(（\[].*$/, '').replace(/\s+/g, '').trim(); }
+// 이 봇에 연결된 로어북 전부 — 카드 기본 로어북 + 캐릭터 '추가 로어북'(ST charLore) + 채팅 로어북.
+// 단톡이면 멤버 카드 전부. ST 월드인포 모듈(world_info.charLore)이 로드되기 전이면 추가 로어북은 빠진다.
+var _kpWIMod = null;
 function _kpBoundWorldNames() {
   var names = [];
   try {
     var ctx = _getCtx(); if (!ctx) return names;
     var chars = ctx.characters || [];
-    function addCharWorld(ch) { var w = ch && ch.data && ch.data.extensions && ch.data.extensions.world; if (w) names.push(w); }
-    if (ctx.characterId != null && chars[ctx.characterId]) addCharWorld(chars[ctx.characterId]); // 단일 카드 1차 월드
-    if (ctx.groupId && Array.isArray(ctx.groups)) {                                              // 그룹챗: 멤버 카드들의 1차 월드
-      var g = ctx.groups.find(function (x) { return x && x.id == ctx.groupId; });
-      ((g && g.members) || []).forEach(function (av) { addCharWorld(chars.find(function (c) { return c && c.avatar === av; })); });
+    var charLore = (_kpWIMod && _kpWIMod.world_info && _kpWIMod.world_info.charLore) || [];
+    function addChar(ch) {
+      if (!ch) return;
+      var w = ch.data && ch.data.extensions && ch.data.extensions.world; if (w) names.push(w); // 카드 기본 로어북
+      var file = String(ch.avatar || '').replace(/\.[^/.]+$/, '');                              // ST getCharaFilename과 같은 키
+      var extra = charLore.find(function (x) { return x && x.name === file; });
+      ((extra && extra.extraBooks) || []).forEach(function (b) { names.push(b); });          // 추가 로어북
     }
-    var cm = ctx.chatMetadata && ctx.chatMetadata.world_info;                                    // 채팅 바인딩 로어북
-    if (cm) names.push(cm);
+    if (ctx.characterId != null && chars[ctx.characterId]) addChar(chars[ctx.characterId]);
+    if (ctx.groupId && Array.isArray(ctx.groups)) {
+      var g = ctx.groups.find(function (x) { return x && x.id == ctx.groupId; });
+      ((g && g.members) || []).forEach(function (av) { addChar(chars.find(function (c) { return c && c.avatar === av; })); });
+    }
+    var cm = ctx.chatMetadata && ctx.chatMetadata.world_info; if (cm) names.push(cm);         // 채팅 로어북
   } catch (e) {}
   return names.filter(function (v, i) { return v && names.indexOf(v) === i; });
 }
 // ── 월드인포 항목 선택(봇별) ─────────────────
-// extension_settings.kkang_phone.wiPick[봇키] = { book, uids, maxTokens }
-//   book: 고른 로어북 이름('' = 사용 안 함, 없으면 연결된 첫 로어북)
-//   uids: 체크한 항목 uid 목록(null = 기본 선택 — 켜져 있고 주입깊이(@Depth)가 아닌 항목 전부)
-//   maxTokens: 고른 항목의 합계 한도(토큰)
+// extension_settings.kkang_phone.wiPick[봇키] = { books, extra, maxTokens }
+//   books: { 로어북 이름: 체크한 uid 목록 | null(기본 선택 — 켜져 있고 주입깊이(@Depth)가 아닌 항목 전부) }
+//   extra: 연결 안 된 로어북 중 직접 추가한 것
+//   maxTokens: 모든 로어북에서 고른 항목의 합계 한도(토큰)
+// 연결된 로어북은 자동으로 목록에 들어온다(빼려면 전체 해제).
 var _KP_WI_MAX_DEF = 4000;
 function _kpWIPickCfg() {
   var store = _kpExtStore(); var key = _charKey();
   if (!store || !key) return null;
   if (!store.wiPick || typeof store.wiPick !== 'object') store.wiPick = {};
-  if (!store.wiPick[key] || typeof store.wiPick[key] !== 'object') store.wiPick[key] = { uids: null, maxTokens: _KP_WI_MAX_DEF };
+  if (!store.wiPick[key] || typeof store.wiPick[key] !== 'object') store.wiPick[key] = { maxTokens: _KP_WI_MAX_DEF };
   var c = store.wiPick[key];
-  if (c.book === undefined) c.book = _kpBoundWorldNames()[0] || '';
+  if (!c.books || typeof c.books !== 'object') c.books = {};
+  if (!Array.isArray(c.extra)) c.extra = [];
+  if (c.book !== undefined) { // 로어북 1개만 고르던 저장값 → 로어북별 선택으로 옮김
+    if (c.book) {
+      c.books[c.book] = Array.isArray(c.uids) ? c.uids : null;
+      if (_kpBoundWorldNames().indexOf(c.book) < 0 && c.extra.indexOf(c.book) < 0) c.extra.push(c.book);
+    }
+    delete c.book; delete c.uids;
+  }
   return c;
+}
+// 이 봇이 쓰는 로어북 목록(연결된 것 먼저, 그다음 직접 추가한 것)
+function _kpWIActiveBooks(c) {
+  var list = _kpBoundWorldNames();
+  ((c && c.extra) || []).forEach(function (b) { if (b && list.indexOf(b) < 0) list.push(b); });
+  return list;
 }
 function _kpWIMaxTokens(c) {
   var n = Math.round(Number(c && c.maxTokens) || _KP_WI_MAX_DEF);
@@ -5065,13 +5089,14 @@ function _kpWIMaxTokens(c) {
 }
 // 기본 선택 규칙 — 켜져 있고, 주입깊이(@Depth, position 4 = 상태창·선택지 같은 지시문)가 아닌 항목
 function _kpWIDefaultPick(e) { return !!e && !e.disable && e.position !== 4; }
-function _kpWIIsPicked(c, e) {
-  if (!c || !Array.isArray(c.uids)) return _kpWIDefaultPick(e);
-  return c.uids.indexOf(String(e.uid)) >= 0;
+function _kpWIIsPicked(c, book, e) {
+  var u = c && c.books ? c.books[book] : null;
+  if (!Array.isArray(u)) return _kpWIDefaultPick(e);
+  return u.indexOf(String(e.uid)) >= 0;
 }
 // ST 월드인포 편집창과 같은 정렬(편집창 정렬 함수 재사용, 없으면 ST 기본 '우선순위' 순)
 var _kpStSortWI = null;
-try { import('/scripts/world-info.js').then(function (m) { _kpStSortWI = (m && m.sortWorldInfoEntries) || null; }).catch(function () {}); } catch (e) {}
+try { import('/scripts/world-info.js').then(function (m) { _kpWIMod = m || null; _kpStSortWI = (m && m.sortWorldInfoEntries) || null; }).catch(function () {}); } catch (e) {}
 function _kpWISorted(book) {
   var list = Object.keys((book && book.entries) || {}).map(function (k) { return book.entries[k]; }).filter(Boolean);
   if (_kpStSortWI) { try { return _kpStSortWI(list.slice()); } catch (e) {} }
@@ -5102,36 +5127,38 @@ function _kpAllWorldNames() {
   } catch (e) {}
   return seen;
 }
-// 체크한 항목을 편집창 순서대로 캐시에 적재(토큰 수 포함). 생성 함수들은 동기라 미리 읽어 둔다.
+// 모든 로어북에서 체크한 항목을 로어북 순서 → 편집창 순서로 캐시에 적재(토큰 수 포함).
+// 생성 함수들은 동기라 미리 읽어 둔다.
 async function _kpLoadWICache() {
   try {
     var ctx = _getCtx(); if (!ctx || typeof ctx.loadWorldInfo !== 'function') return;
     var c = _kpWIPickCfg();
-    var bookName = (c && c.book) || '';
-    var key = (_charKey() || '') + '|' + bookName + '|' + (c && Array.isArray(c.uids) ? c.uids.join(',') : '*');
+    var books = c ? _kpWIActiveBooks(c) : [];
+    var key = (_charKey() || '') + '|' + books.map(function (b) {
+      var u = c.books[b]; return b + ':' + (Array.isArray(u) ? u.join(',') : '*');
+    }).join('|');
     if (_kpWICache.loading) { _kpWICache.again = true; return; }
     if (key === _kpWICache.key) return;
     _kpWICache.loading = true;
     var entries = [];
-    if (bookName) {
+    for (var bi = 0; bi < books.length; bi++) {
       try {
-        var data = await ctx.loadWorldInfo(bookName);
-        var sorted = _kpWISorted(data);
+        var sorted = _kpWISorted(await ctx.loadWorldInfo(books[bi]));
         for (var i = 0; i < sorted.length; i++) {
           var e = sorted[i];
-          if (!_kpWIIsPicked(c, e)) continue;
+          if (!_kpWIIsPicked(c, books[bi], e)) continue;
           var content = e.content ? String(e.content) : '';
           if (!content.trim()) continue;
           if (typeof ctx.substituteParams === 'function') { try { content = ctx.substituteParams(content); } catch (e3) {} }
           var keys = (Array.isArray(e.key) ? e.key.slice() : []);
           if (Array.isArray(e.keysecondary)) keys = keys.concat(e.keysecondary);
-          entries.push({ uid: String(e.uid), keys: keys, comment: e.comment || '', content: content, constant: !!e.constant, tokens: await _kpCountTokens(content) });
+          entries.push({ book: books[bi], uid: String(e.uid), keys: keys, comment: e.comment || '', content: content, constant: !!e.constant, tokens: await _kpCountTokens(content) });
         }
       } catch (e2) {}
     }
     _kpWICache.key = key;
     _kpWICache.entries = entries;
-    try { console.warn('[Phone:WI] 캐시 적재: ' + (bookName || '로어북 없음') + ' · 선택 항목 ' + entries.length + '개'); } catch (e4) {}
+    try { console.warn('[Phone:WI] 캐시 적재: 로어북 ' + books.length + '개(' + books.join(', ').slice(0, 80) + ') · 선택 항목 ' + entries.length + '개'); } catch (e4) {}
   } catch (e) {} finally {
     _kpWICache.loading = false;
     if (_kpWICache.again) { _kpWICache.again = false; _kpLoadWICache(); }
@@ -5140,24 +5167,26 @@ async function _kpLoadWICache() {
 // 선택이 바뀌면 캐시를 버리고 다시 적재
 function _kpWIInvalidate() { _kpWICache.key = ''; _kpLoadWICache(); }
 
-// ── 설정 화면: 로어북·항목 선택기 ─────────────────
-var _kpWIView = { entries: [], tokens: {}, open: false };
-function _kpWIMetaText(c) {
-  var ents = _kpWIView.entries;
-  var chosen = ents.filter(function (e) { return _kpWIIsPicked(c, e); });
-  var total = chosen.reduce(function (n, e) { return n + (_kpWIView.tokens[String(e.uid)] || 0); }, 0);
+// ── 설정 화면: 로어북별 항목 선택기 ─────────────────
+// _kpWIView.books[i] = { name, linked, entries, tokens } (화면에 그린 순서), open = { 로어북 이름: 펼침 여부 }
+var _kpWIView = { books: [], open: {} };
+function _kpWIBookStat(c, b) {
+  var chosen = b.entries.filter(function (e) { return _kpWIIsPicked(c, b.name, e); });
+  return { n: chosen.length, tok: chosen.reduce(function (s, e) { return s + (b.tokens[String(e.uid)] || 0); }, 0) };
+}
+function _kpWIMetaHtml(c) {
+  var n = 0, tok = 0;
+  _kpWIView.books.forEach(function (b) { var s = _kpWIBookStat(c, b); n += s.n; tok += s.tok; });
   var mx = _kpWIMaxTokens(c);
-  return {
-    summary: '항목 목록 · ' + ents.length + '개 중 ' + chosen.length + '개 선택',
-    meta: '<b>' + chosen.length + '개 선택 · ' + total.toLocaleString() + ' 토큰</b>' +
-      (total > mx ? ' · 최대 ' + mx.toLocaleString() + ' 토큰을 넘어서 뒤쪽 항목은 빠져요' : ' / 최대 ' + mx.toLocaleString())
-  };
+  return '<b>' + _kpWIView.books.length + '개 로어북 · ' + n + '개 선택 · ' + tok.toLocaleString() + ' 토큰</b>' +
+    (tok > mx ? ' · 최대 ' + mx.toLocaleString() + ' 토큰을 넘어서 뒤쪽 항목은 빠져요' : ' / 최대 ' + mx.toLocaleString());
 }
 function _kpWIUpdateMeta() {
   var c = _kpWIPickCfg(); if (!c) return;
-  var m = _kpWIMetaText(c);
-  var s = _kpEl('kp-wi-sum'); if (s) s.textContent = m.summary;
-  var d = _kpEl('kp-wi-meta'); if (d) d.innerHTML = m.meta;
+  _kpWIView.books.forEach(function (b, i) {
+    var s = _kpEl('kp-wi-sum-' + i); if (s) s.textContent = b.entries.length + '개 중 ' + _kpWIBookStat(c, b).n + '개 선택';
+  });
+  var d = _kpEl('kp-wi-meta'); if (d) d.innerHTML = _kpWIMetaHtml(c);
   _kpForcePaint();
 }
 async function _kpDrawWIPicker() {
@@ -5166,80 +5195,89 @@ async function _kpDrawWIPicker() {
   if (!c) { box.innerHTML = '<div class="settings-desc">봇을 연 상태에서 설정할 수 있어요.</div>'; _kpForcePaint(); return; }
   var ctx = _getCtx();
   var linked = _kpBoundWorldNames();
-  var all = _kpAllWorldNames();
-  var books = linked.concat(all.filter(function (n) { return linked.indexOf(n) < 0; }));
-  var opts = '<option value=""' + (c.book ? '' : ' selected') + '>사용 안 함</option>' + books.map(function (n) {
-    return '<option value="' + escapeHtml(n) + '"' + (n === c.book ? ' selected' : '') + '>' + escapeHtml(n) + (linked.indexOf(n) >= 0 ? ' (연결됨)' : '') + '</option>';
-  }).join('');
-  var head = '<div class="kp-wi-head"><i class="fas fa-book"></i> 월드인포 · ' + escapeHtml((ctx && ctx.name2) || '이 봇') + '</div>' +
-    '<select class="modal-input kp-wi-sel" onchange="kpWIPickBook(this.value)">' + opts + '</select>';
-  if (!c.book) {
-    _kpWIView.entries = []; _kpWIView.tokens = {};
-    box.innerHTML = head + '<div class="settings-desc">로어북을 고르면 항목 목록이 나와요.</div>';
-    _kpForcePaint(); return;
-  }
-  var bookName = c.book;
-  box.innerHTML = head + '<div class="settings-desc">항목 불러오는 중…</div>';
+  var names = _kpWIActiveBooks(c);
+  var head = '<div class="kp-wi-head"><i class="fas fa-book"></i> 월드인포 · ' + escapeHtml((ctx && ctx.name2) || '이 봇') + '</div>';
+  box.innerHTML = head + '<div class="settings-desc">' + (names.length ? '로어북 불러오는 중…' : '연결된 로어북이 없어요.') + '</div>';
   _kpForcePaint();
-  var entries = [];
-  try { entries = _kpWISorted(await ctx.loadWorldInfo(bookName)); } catch (e) {}
-  var tokens = {};
-  await Promise.all(entries.map(async function (e) { tokens[String(e.uid)] = await _kpCountTokens(e.content); }));
-  if (bookName !== (_kpWIPickCfg() || {}).book) return; // 불러오는 사이 다른 로어북을 골랐으면 버림
+  var books = [];
+  for (var i = 0; i < names.length; i++) {
+    var entries = [];
+    try { entries = _kpWISorted(await ctx.loadWorldInfo(names[i])); } catch (e) {}
+    var tokens = {};
+    await Promise.all(entries.map(async function (e) { tokens[String(e.uid)] = await _kpCountTokens(e.content); }));
+    books.push({ name: names[i], linked: linked.indexOf(names[i]) >= 0, entries: entries, tokens: tokens });
+  }
   box = _kpEl('kp-wi-picker'); if (!box) return;
-  _kpWIView.entries = entries; _kpWIView.tokens = tokens;
-  var rows = entries.map(function (e) {
-    var uid = escapeHtml(String(e.uid));
-    var tag = (e.disable ? '꺼짐 · ' : '') + (e.position === 4 ? '@D · ' : '');
-    return '<label class="kp-wi-row' + (e.disable ? ' off' : '') + '">' +
-      '<input type="checkbox" data-uid="' + uid + '"' + (_kpWIIsPicked(c, e) ? ' checked' : '') + ' onchange="kpWIPickToggle(this.getAttribute(\'data-uid\'),this.checked)">' +
-      '<span class="kp-wi-name">' + escapeHtml(_kpWIEntryLabel(e)) + '</span>' +
-      '<span class="kp-wi-size">' + tag + (tokens[String(e.uid)] || 0).toLocaleString() + ' 토큰</span></label>';
+  _kpWIView.books = books;
+  var blocks = books.map(function (b, bi) {
+    var rows = b.entries.map(function (e) {
+      var tag = (e.disable ? '꺼짐 · ' : '') + (e.position === 4 ? '@D · ' : '');
+      return '<label class="kp-wi-row' + (e.disable ? ' off' : '') + '">' +
+        '<input type="checkbox" data-uid="' + escapeHtml(String(e.uid)) + '"' + (_kpWIIsPicked(c, b.name, e) ? ' checked' : '') + ' onchange="kpWIPickToggle(' + bi + ',this.getAttribute(\'data-uid\'),this.checked)">' +
+        '<span class="kp-wi-name">' + escapeHtml(_kpWIEntryLabel(e)) + '</span>' +
+        '<span class="kp-wi-size">' + tag + (b.tokens[String(e.uid)] || 0).toLocaleString() + ' 토큰</span></label>';
+    }).join('');
+    return '<details class="kp-wi-details"' + (_kpWIView.open[b.name] ? ' open' : '') + ' ontoggle="kpWIListToggle(' + bi + ',this.open)">' +
+        '<summary><i class="fas fa-book-open"></i> <span class="kp-wi-bname">' + escapeHtml(b.name) +
+          ' <em>' + (b.linked ? '연결됨' : '추가함') + ' · <span id="kp-wi-sum-' + bi + '">' + b.entries.length + '개 중 ' + _kpWIBookStat(c, b).n + '개 선택</span></em></span>' +
+          (b.linked ? '' : '<button class="kp-wi-x" title="목록에서 빼기" onclick="event.preventDefault();event.stopPropagation();kpWIRemoveBook(' + bi + ')"><i class="fas fa-xmark"></i></button>') +
+          '<i class="fas fa-chevron-down kp-wi-chev"></i></summary>' +
+        (b.entries.length
+          ? '<div class="kp-wi-tools"><button onclick="kpWIPickAll(' + bi + ',true)"><i class="fas fa-square-check"></i> 전체 선택</button><button onclick="kpWIPickAll(' + bi + ',false)"><i class="fas fa-square"></i> 전체 해제</button></div>' +
+            '<div class="kp-wi-list">' + rows + '</div>'
+          : '<div class="settings-desc" style="padding:10px">항목이 없는 로어북이에요.</div>') +
+      '</details>';
   }).join('');
-  var m = _kpWIMetaText(c);
-  box.innerHTML = head +
-    '<details class="kp-wi-details"' + (_kpWIView.open ? ' open' : '') + ' ontoggle="kpWIListToggle(this.open)">' +
-      '<summary><i class="fas fa-list-check"></i> <span id="kp-wi-sum">' + m.summary + '</span><i class="fas fa-chevron-down kp-wi-chev"></i></summary>' +
-      (entries.length
-        ? '<div class="kp-wi-tools"><button onclick="kpWIPickAll(true)"><i class="fas fa-square-check"></i> 전체 선택</button><button onclick="kpWIPickAll(false)"><i class="fas fa-square"></i> 전체 해제</button></div>' +
-          '<div class="kp-wi-list">' + rows + '</div>'
-        : '<div class="settings-desc" style="padding:10px">항목이 없는 로어북이에요.</div>') +
-    '</details>' +
-    '<div class="settings-desc" id="kp-wi-meta">' + m.meta + '</div>' +
-    '<div class="settings-desc">이 봇에만 저장돼요. <b>@D</b> = 주입깊이 항목(상태창·선택지 같은 지시문이 많아 기본 제외).</div>';
+  var others = _kpAllWorldNames().filter(function (n) { return names.indexOf(n) < 0; });
+  var addSel = '<select class="modal-input kp-wi-sel" onchange="kpWIAddBook(this.value)">' +
+    '<option value="">＋ 다른 로어북 추가</option>' +
+    others.map(function (n) { return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; }).join('') + '</select>';
+  box.innerHTML = head + blocks + addSel +
+    '<div class="settings-desc" id="kp-wi-meta">' + _kpWIMetaHtml(c) + '</div>' +
+    '<div class="settings-desc">카드 로어북·추가 로어북·채팅 로어북은 자동으로 들어와요(빼려면 전체 해제). 이 봇에만 저장돼요. <b>@D</b> = 주입깊이 항목(상태창·선택지 같은 지시문이 많아 기본 제외).</div>';
   _kpForcePaint();
 }
-function kpWIListToggle(open) { _kpWIView.open = !!open; _kpForcePaint(); }
-function kpWIPickBook(name) {
-  var c = _kpWIPickCfg(); if (!c) return;
-  c.book = String(name || '');
-  c.uids = null; // 로어북을 바꾸면 기본 선택부터
+function kpWIListToggle(bi, open) { var b = _kpWIView.books[bi]; if (b) _kpWIView.open[b.name] = !!open; _kpForcePaint(); }
+function kpWIAddBook(name) {
+  var c = _kpWIPickCfg(); if (!c || !name) return;
+  if (c.extra.indexOf(name) < 0) c.extra.push(name);
+  _kpWIView.open[name] = true;
   _saveExtSettings();
   _kpWIInvalidate();
   _kpDrawWIPicker();
 }
-// 기본 선택(uids=null) 상태에서 처음 손대면 현재 기본 선택을 실제 목록으로 고정
-function _kpWIMaterialize(c) {
-  if (!Array.isArray(c.uids)) c.uids = _kpWIView.entries.filter(_kpWIDefaultPick).map(function (e) { return String(e.uid); });
+function kpWIRemoveBook(bi) {
+  var c = _kpWIPickCfg(); var b = _kpWIView.books[bi]; if (!c || !b) return;
+  c.extra = c.extra.filter(function (n) { return n !== b.name; });
+  delete c.books[b.name];
+  _saveExtSettings();
+  _kpWIInvalidate();
+  _kpDrawWIPicker();
 }
-function kpWIPickToggle(uid, on) {
-  var c = _kpWIPickCfg(); if (!c) return;
-  _kpWIMaterialize(c);
+// 기본 선택(null) 상태에서 처음 손대면 현재 기본 선택을 실제 목록으로 고정
+function _kpWIMaterialize(c, b) {
+  if (!Array.isArray(c.books[b.name])) c.books[b.name] = b.entries.filter(_kpWIDefaultPick).map(function (e) { return String(e.uid); });
+  return c.books[b.name];
+}
+function kpWIPickToggle(bi, uid, on) {
+  var c = _kpWIPickCfg(); var b = _kpWIView.books[bi]; if (!c || !b) return;
+  var u = _kpWIMaterialize(c, b);
   uid = String(uid);
-  var i = c.uids.indexOf(uid);
-  if (on && i < 0) c.uids.push(uid);
-  if (!on && i >= 0) c.uids.splice(i, 1);
+  var i = u.indexOf(uid);
+  if (on && i < 0) u.push(uid);
+  if (!on && i >= 0) u.splice(i, 1);
   _saveExtSettings();
   _kpWIInvalidate();
   _kpWIUpdateMeta();
 }
-function kpWIPickAll(on) {
-  var c = _kpWIPickCfg(); if (!c) return;
-  c.uids = on ? _kpWIView.entries.map(function (e) { return String(e.uid); }) : [];
+function kpWIPickAll(bi, on) {
+  var c = _kpWIPickCfg(); var b = _kpWIView.books[bi]; if (!c || !b) return;
+  c.books[b.name] = on ? b.entries.map(function (e) { return String(e.uid); }) : [];
   _saveExtSettings();
   _kpWIInvalidate();
   var box = _kpEl('kp-wi-picker');
-  if (box) box.querySelectorAll('.kp-wi-row input').forEach(function (b) { b.checked = !!on; });
+  var det = box ? box.querySelectorAll('.kp-wi-details')[bi] : null;
+  if (det) det.querySelectorAll('.kp-wi-row input').forEach(function (x) { x.checked = !!on; });
   _kpWIUpdateMeta();
 }
 function kpWISetMax(v) {
@@ -13256,7 +13294,8 @@ function _kkangPhoneInit() {
   if (typeof _applyCharScope !== 'undefined') window._applyCharScope = _applyCharScope;
   if (typeof setCtxMsgs !== 'undefined') window.setCtxMsgs = setCtxMsgs;
   if (typeof kpWIListToggle !== 'undefined') window.kpWIListToggle = kpWIListToggle;
-  if (typeof kpWIPickBook !== 'undefined') window.kpWIPickBook = kpWIPickBook;
+  if (typeof kpWIAddBook !== 'undefined') window.kpWIAddBook = kpWIAddBook;
+  if (typeof kpWIRemoveBook !== 'undefined') window.kpWIRemoveBook = kpWIRemoveBook;
   if (typeof kpWIPickToggle !== 'undefined') window.kpWIPickToggle = kpWIPickToggle;
   if (typeof kpWIPickAll !== 'undefined') window.kpWIPickAll = kpWIPickAll;
   if (typeof kpWISetMax !== 'undefined') window.kpWISetMax = kpWISetMax;
